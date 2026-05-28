@@ -59,9 +59,27 @@ function getFirstWeekday(y: number, m: number) { const d = new Date(y, m, 1).get
 
 type View = 'planner' | 'tracker' | 'settings';
 
-// ── Fokus-Timer ──────────────────────────────────────────
 const FOCUS_MINS = 25;
 
+// ── SVG Logo ────────────────────────────────────────────
+function FreigeistLogo() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="Freigeist" xmlns="http://www.w3.org/2000/svg">
+      <rect width="28" height="28" rx="8" fill="url(#lg)" />
+      <path d="M14 22 C14 22 8 17 8 12 A6 6 0 0 1 20 12 C20 17 14 22 14 22Z" fill="none" stroke="#00e5ff" strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx="14" cy="12" r="2" fill="#00e5ff" opacity="0.9" />
+      <path d="M14 10 L14 6" stroke="#00e5ff" strokeWidth="1.5" strokeLinecap="round" />
+      <defs>
+        <linearGradient id="lg" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#0d0d18" />
+          <stop offset="1" stopColor="#141428" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+// ── Fokus-Timer ──────────────────────────────────────────
 function FokusOverlay({ onExit }: { onExit: () => void }) {
   const [secs, setSecs] = useState(FOCUS_MINS * 60);
   const [running, setRunning] = useState(false);
@@ -86,7 +104,7 @@ function FokusOverlay({ onExit }: { onExit: () => void }) {
   return (
     <div className="fokus-overlay">
       <div className="fokus-card">
-        <div className="fokus-label">🎯 FOKUS MODUS</div>
+        <div className="fokus-label">⚡ FOKUS MODUS</div>
         <div className="fokus-timer">{mm}:{ss}</div>
         <div className="fokus-bar"><div className="fokus-bar-fill" style={{ width: `${pct}%` }} /></div>
         <div className="fokus-actions">
@@ -96,7 +114,7 @@ function FokusOverlay({ onExit }: { onExit: () => void }) {
           <button className="fokus-btn" onClick={() => { setSecs(FOCUS_MINS * 60); setRunning(false); }}>↺ Reset</button>
           <button className="fokus-btn danger" onClick={onExit}>✕ Beenden</button>
         </div>
-        <div className="fokus-tip">📵 Handy weg. Alle Ablenkungen aus. Nur dieser Task zählt.</div>
+        <div className="fokus-tip">📵 Handy weg · Ablenkungen aus · Nur dieser Task zählt.</div>
       </div>
     </div>
   );
@@ -108,8 +126,11 @@ function ReminderPopup({ onClose, onOpen }: { onClose: () => void; onOpen: () =>
     <div className="reminder-overlay" onClick={onClose}>
       <div className="reminder-card" onClick={e => e.stopPropagation()}>
         <div className="reminder-emoji">☀️</div>
-        <div className="reminder-title">Guten Morgen, Freigeist!</div>
-        <div className="reminder-body">Zeit für deine <strong>3 Big Things</strong>.<br />Was zählt heute wirklich?</div>
+        <div className="reminder-title">Guten Morgen, Karim!</div>
+        <div className="reminder-body">
+          Zeit für deine <strong>3 Big Things</strong>.<br />
+          Was zählt heute wirklich?
+        </div>
         <div className="reminder-actions">
           <button className="fokus-btn primary" onClick={onOpen}>✏️ Jetzt eintragen</button>
           <button className="fokus-btn" onClick={onClose}>Später</button>
@@ -128,16 +149,29 @@ export const App: React.FC = () => {
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
-  // Fokus
   const [fokusActive, setFokusActive] = useState(false);
 
-  // Reminder
   const [reminderTime, setReminderTime] = useState('08:00');
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>('default');
   const [showReminderPopup, setShowReminderPopup] = useState(false);
   const reminderRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastFiredRef = useRef<string>('');
+
+  // ── URL-Parameter: ?morning=1 oder ?focus=true öffnet Popup/Fokus
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('morning') === '1' || params.get('morning') === 'true') {
+      setTimeout(() => setShowReminderPopup(true), 600);
+    }
+    if (params.get('focus') === 'true') {
+      setTimeout(() => setFokusActive(true), 600);
+    }
+    // Clean URL ohne Reload
+    if (params.has('morning') || params.has('focus')) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     setTasks(loadState());
@@ -159,14 +193,12 @@ export const App: React.FC = () => {
       const todayKey = todayStr() + hhmm;
       if (hhmm === reminderTime && lastFiredRef.current !== todayKey) {
         lastFiredRef.current = todayKey;
-        // Browser notification
         if (notifPerm === 'granted') {
           new Notification('☀️ Freigeist – Guten Morgen!', {
             body: 'Was sind deine 3 Big Things für heute?',
             icon: '/apple-touch-icon.png',
           });
         }
-        // In-App popup
         setShowReminderPopup(true);
       }
     };
@@ -182,9 +214,7 @@ export const App: React.FC = () => {
   };
 
   const toggleReminder = async () => {
-    if (!reminderEnabled && notifPerm !== 'granted') {
-      await requestNotifPermission();
-    }
+    if (!reminderEnabled && notifPerm !== 'granted') await requestNotifPermission();
     setReminderEnabled(e => !e);
   };
 
@@ -241,8 +271,13 @@ export const App: React.FC = () => {
 
       <div className="app-root">
         <aside className="sidebar">
-          <h1>Freigeist Planner</h1>
-          <div className="tagline">ADHS-taugliches Minimal-Board für deinen Tag.</div>
+          <div className="sidebar-logo">
+            <FreigeistLogo />
+            <div>
+              <h1>Freigeist Planner</h1>
+              <div className="tagline">ADHS-taugliches Minimal-Board.</div>
+            </div>
+          </div>
 
           <div className="nav-section-title">Heute</div>
           <div className={`nav-item${view==='planner'?' active':''}`} onClick={() => setView('planner')}>
@@ -256,7 +291,7 @@ export const App: React.FC = () => {
 
           <div className="nav-section-title">Tools</div>
           <div className="nav-item" style={{cursor:'default'}}>
-            <span>🎯</span>
+            <span>⚡</span>
             <span style={{flex:1}}>Fokus-Modus</span>
             <button
               className={`toggle-btn${fokusActive?' on':''}`}
@@ -295,10 +330,10 @@ export const App: React.FC = () => {
             <div className="notif-warn">⚠️ Benachrichtigungen blockiert – in Safari-Einstellungen freischalten.</div>
           )}
 
-          <div className="nav-section-title">Später</div>
-          <div className="nav-item"><span>⚡ Quick Capture</span></div>
-          <div className="nav-item"><span>♻ Routinen</span></div>
-          <div className="nav-item"><span>🎧 Musik / Projekte</span></div>
+          <div className="nav-section-title">Bald</div>
+          <div className="nav-item" style={{opacity:0.5,cursor:'default'}}><span>⚡</span><span>Quick Capture</span></div>
+          <div className="nav-item" style={{opacity:0.5,cursor:'default'}}><span>♻</span><span>Routinen</span></div>
+          <div className="nav-item" style={{opacity:0.5,cursor:'default'}}><span>🎧</span><span>Musik / Projekte</span></div>
 
           {streak > 0 && (
             <div className="streak-badge">🔥 {streak} Tag{streak !== 1 ? 'e' : ''} in Folge</div>
@@ -319,7 +354,7 @@ export const App: React.FC = () => {
                       className={`pill fokus-pill${fokusActive?' active':''}`}
                       onClick={() => setFokusActive(f => !f)}
                     >
-                      {fokusActive ? '🎯 Fokus AN' : '🎯 Fokus starten'}
+                      {fokusActive ? '⚡ Fokus AN' : '⚡ Fokus starten'}
                     </button>
                   </div>
                 </div>
@@ -336,7 +371,7 @@ export const App: React.FC = () => {
                         <input type="checkbox" checked={task.done} onChange={() => toggleTask(task.id)} />
                         <div className="list-item-label">
                           {task.label}
-                          <div className="list-item-meta">{task.done ? '✓ fertig' : 'offen'}</div>
+                          <div className="list-item-meta">{task.done ? '✓ erledigt' : 'offen'}</div>
                         </div>
                       </label>
                     ))}
@@ -346,7 +381,7 @@ export const App: React.FC = () => {
                   </div>
                   <div className="input-row">
                     <input
-                      placeholder="Neue Priorität ..."
+                      placeholder="Neue Priorität …"
                       value={input}
                       onChange={e => setInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') addTask(); }}
@@ -384,9 +419,9 @@ export const App: React.FC = () => {
                 <div className="streak-inline">🔥 <strong>{streak}</strong> Tag{streak !== 1 ? 'e' : ''} Streak</div>
               </header>
               <div className="legend-row">
-                <span className="legend-dot full" /> Alle erledigt
-                <span className="legend-dot partial" /> Teils erledigt
-                <span className="legend-dot none" /> Nichts erledigt
+                <span><span className="legend-dot full" /> Alle erledigt</span>
+                <span><span className="legend-dot partial" /> Teils erledigt</span>
+                <span><span className="legend-dot none" /> Nichts erledigt</span>
               </div>
               <div className="cal-nav">
                 <button className="cal-nav-btn" onClick={() => { if (calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1); }}>‹</button>
