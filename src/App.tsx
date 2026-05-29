@@ -1,26 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
+import {
+  loadCaptures,
+  loadProjects,
+  loadRoutines,
+  loadTasks,
+  loadTracker,
+  saveCaptures,
+  saveProjects,
+  saveRoutines,
+  saveTasks,
+  saveTracker,
+} from './db';
+import type {
+  Capture,
+  DayRecord,
+  DayTask,
+  Project,
+  ProjectStatus,
+  ProjectType,
+  RoutineDay,
+  RoutineHistoryEntry,
+  RoutineItem,
+  View,
+} from './types';
 
-// ── Types ────────────────────────────────────────────────
-export type DayTask = { id: string; label: string; done: boolean; };
-export type DayRecord = { date: string; tasks: { label: string; done: boolean }[]; };
-export type Capture = { id: string; text: string; ts: string; date: string; };
-export type RoutineItem = { id: string; label: string; done: boolean; category: 'morgen' | 'abend' | 'custom'; };
-export type RoutineDay = { date: string; items: RoutineItem[]; };
-export type RoutineHistoryEntry = { date: string; done: number; total: number; };
-export type ProjectStatus = 'idee' | 'inarbeit' | 'fertig' | 'pausiert';
-export type ProjectType = 'suno' | 'remix' | 'live' | 'other';
-export type Project = { id: string; title: string; type: ProjectType; status: ProjectStatus; note: string; sunoUrl?: string; updatedAt: string; createdAt: string; };
+export type { Capture, DayRecord, DayTask, Project, ProjectStatus, ProjectType, RoutineDay, RoutineHistoryEntry, RoutineItem };
 
-// ── Storage Keys ─────────────────────────────────────────
-const STORAGE_KEY       = 'freigeist-planner-v1';
-const HISTORY_KEY       = 'freigeist-history-v1';
-const REMINDER_KEY      = 'freigeist-reminder-v1';
-const CAPTURES_KEY      = 'freigeist-captures-v1';
-const ROUTINES_KEY      = 'freigeist-routines-v1';
-const ROUTINE_CFG_KEY   = 'freigeist-routine-config-v1';
-const ROUTINE_HIST_KEY  = 'freigeist-routine-history-v1';
-const PROJECTS_KEY      = 'freigeist-projects-v1';
+// ── Storage Keys (local cache + reminder) ────────────────
+const REMINDER_KEY = 'freigeist-reminder-v1';
 
 // ── Helpers ──────────────────────────────────────────────
 function todayStr() {
@@ -66,10 +74,6 @@ function calcRoutineStreak(hist: RoutineHistoryEntry[]): number {
   return streak;
 }
 
-function loadState(): DayTask[]  { return load(STORAGE_KEY, []); }
-function saveState(t: DayTask[]) { save(STORAGE_KEY, t); }
-function loadHistory(): DayRecord[]  { return load(HISTORY_KEY, []); }
-function saveHistory(h: DayRecord[]) { save(HISTORY_KEY, h); }
 function loadReminderTime(): string  { return load(REMINDER_KEY, '08:00'); }
 function saveReminderTime(t: string) { save(REMINDER_KEY, t); }
 
@@ -102,7 +106,6 @@ function exportJSON(data: unknown, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-type View = 'planner' | 'tracker' | 'capture' | 'routines' | 'projects';
 const FOCUS_MINS = 25;
 
 // ── SVG Logo ─────────────────────────────────────────────
@@ -213,6 +216,7 @@ export const App: React.FC = () => {
   const [projects, setProjects]             = useState<Project[]>([]);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [projTypeFilter, setProjTypeFilter] = useState<ProjectType | 'all'>('all');
+  const [hydrated, setHydrated] = useState(false);
 
   // Global Escape handler for FAB sheet
   useEffect(() => {
@@ -229,60 +233,72 @@ export const App: React.FC = () => {
     if (params.has('morning') || params.has('focus')) window.history.replaceState({}, '', window.location.pathname);
   }, []);
 
-  // ── Load from storage ───────────────────────────────────
+  // ── Load from Supabase (fallback: localStorage cache) ─────
   useEffect(() => {
-    setTasks(loadState());
-    setHistory(loadHistory());
-    setReminderTime(loadReminderTime());
-    if ('Notification' in window) setNotifPerm(Notification.permission);
-    setCaptures(load<Capture[]>(CAPTURES_KEY, []));
+    let cancelled = false;
+    (async () => {
+      const [loadedTasks, loadedHistory, loadedCaptures, routinesBundle, loadedProjects] = await Promise.all([
+        loadTasks(),
+        loadTracker(),
+        loadCaptures(),
+        loadRoutines(DEFAULT_ROUTINES),
+        loadProjects(),
+      ]);
+      if (cancelled) return;
 
-    // Routine config + tages-reset with sync fix
-    const cfg = load<RoutineItem[]>(ROUTINE_CFG_KEY, DEFAULT_ROUTINES);
-    setRoutineConfig(cfg);
-    const cfgIds = new Set(cfg.map(r => r.id));
-    const storedDay = load<RoutineDay>(ROUTINES_KEY, { date: '', items: [] });
-    const today = todayStr();
-    if (storedDay.date === today) {
-      // FIX: filter out items not in current config, add missing ones
-      const syncedItems = cfg.map(cfgItem => {
-        const existing = storedDay.items.find(i => i.id === cfgItem.id);
-        return existing ?? { ...cfgItem, done: false };
-      }).filter(i => cfgIds.has(i.id));
-      const fresh: RoutineDay = { date: today, items: syncedItems };
-      setRoutineDay(fresh);
-    } else {
-      // Day changed: save previous day to history before reset
-      const prevHist = load<RoutineHistoryEntry[]>(ROUTINE_HIST_KEY, []);
-      if (storedDay.date && storedDay.items.length > 0) {
-        const prevEntry: RoutineHistoryEntry = {
-          date: storedDay.date,
-          done: storedDay.items.filter(i => i.done).length,
-          total: storedDay.items.length,
-        };
-        const newHist = [...prevHist.filter(e => e.date !== storedDay.date), prevEntry];
-        save(ROUTINE_HIST_KEY, newHist);
-        setRoutineHistory(newHist);
+      setTasks(loadedTasks);
+      setHistory(loadedHistory);
+      setReminderTime(loadReminderTime());
+      if ('Notification' in window) setNotifPerm(Notification.permission);
+      setCaptures(loadedCaptures);
+
+      const cfg = routinesBundle.config.length ? routinesBundle.config : DEFAULT_ROUTINES;
+      setRoutineConfig(cfg);
+      const cfgIds = new Set(cfg.map(r => r.id));
+      const storedDay = routinesBundle.day;
+      const today = todayStr();
+      if (storedDay.date === today) {
+        const syncedItems = cfg.map(cfgItem => {
+          const existing = storedDay.items.find(i => i.id === cfgItem.id);
+          return existing ?? { ...cfgItem, done: false };
+        }).filter(i => cfgIds.has(i.id));
+        setRoutineDay({ date: today, items: syncedItems });
       } else {
-        setRoutineHistory(prevHist);
+        const prevHist = routinesBundle.history;
+        if (storedDay.date && storedDay.items.length > 0) {
+          const prevEntry: RoutineHistoryEntry = {
+            date: storedDay.date,
+            done: storedDay.items.filter(i => i.done).length,
+            total: storedDay.items.length,
+          };
+          const newHist = [...prevHist.filter(e => e.date !== storedDay.date), prevEntry];
+          setRoutineHistory(newHist);
+          const fresh: RoutineDay = { date: today, items: cfg.map(r => ({ ...r, done: false })) };
+          setRoutineDay(fresh);
+          void saveRoutines({ config: cfg, day: fresh, history: newHist });
+        } else {
+          setRoutineHistory(prevHist);
+          const fresh: RoutineDay = { date: today, items: cfg.map(r => ({ ...r, done: false })) };
+          setRoutineDay(fresh);
+        }
       }
-      const fresh: RoutineDay = { date: today, items: cfg.map(r => ({ ...r, done: false })) };
-      setRoutineDay(fresh);
-      save(ROUTINES_KEY, fresh);
-    }
 
-    setProjects(load<Project[]>(PROJECTS_KEY, []));
+      setProjects(loadedProjects);
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  // ── Persist ─────────────────────────────────────────────
-  useEffect(() => { saveState(tasks); }, [tasks]);
-  useEffect(() => { saveHistory(history); }, [history]);
+  // ── Persist to Supabase + localStorage cache ────────────
+  useEffect(() => { if (hydrated) void saveTasks(tasks); }, [tasks, hydrated]);
+  useEffect(() => { if (hydrated) void saveTracker(history); }, [history, hydrated]);
   useEffect(() => { saveReminderTime(reminderTime); }, [reminderTime]);
-  useEffect(() => { save(CAPTURES_KEY, captures); }, [captures]);
-  useEffect(() => { save(ROUTINES_KEY, routineDay); }, [routineDay]);
-  useEffect(() => { save(ROUTINE_CFG_KEY, routineConfig); }, [routineConfig]);
-  useEffect(() => { save(ROUTINE_HIST_KEY, routineHistory); }, [routineHistory]);
-  useEffect(() => { save(PROJECTS_KEY, projects); }, [projects]);
+  useEffect(() => { if (hydrated) void saveCaptures(captures); }, [captures, hydrated]);
+  useEffect(() => {
+    if (!hydrated) return;
+    void saveRoutines({ config: routineConfig, day: routineDay, history: routineHistory });
+  }, [routineDay, routineConfig, routineHistory, hydrated]);
+  useEffect(() => { if (hydrated) void saveProjects(projects); }, [projects, hydrated]);
 
   // ── Reminder ────────────────────────────────────────────
   useEffect(() => {
@@ -463,6 +479,9 @@ export const App: React.FC = () => {
               <div className="tagline">ADHS-taugliches Minimal-Board.</div>
             </div>
           </div>
+          <button className="fokus-btn" style={{ width: '100%', fontSize: 12, padding: '8px 12px', marginBottom: 12 }} onClick={handleExport}>
+            ⬇ JSON Export
+          </button>
 
           <div className="nav-section-title">Heute</div>
           <div className={`nav-item${view==='planner'?' active':''}`} onClick={() => setView('planner')}>
