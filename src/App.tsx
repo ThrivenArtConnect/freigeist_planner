@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import './App.css';
 
 // ── Types ────────────────────────────────────────────────
 export type DayTask = { id: string; label: string; done: boolean; };
@@ -211,6 +212,7 @@ export const App: React.FC = () => {
   // Projekte
   const [projects, setProjects]             = useState<Project[]>([]);
   const [editingProject, setEditingProject] = useState<string | null>(null);
+  const [projTypeFilter, setProjTypeFilter] = useState<ProjectType | 'all'>('all');
 
   // Global Escape handler for FAB sheet
   useEffect(() => {
@@ -486,4 +488,331 @@ export const App: React.FC = () => {
             </button>
           </div>
           {reminderEnabled && (
-            <div c
+            <div className="reminder-time-row">
+              <span style={{fontSize:11,color:'var(--text-muted)'}}>Uhrzeit</span>
+              <input type="time" value={reminderTime} onChange={e => setReminderTime(e.target.value)} className="time-input" />
+            </div>
+          )}
+          {notifPerm === 'denied' && <div className="notif-warn">⚠️ Benachrichtigungen blockiert – in Safari-Einstellungen freischalten.</div>}
+
+          <div className="nav-section-title">Features</div>
+          <div className={`nav-item${view==='capture'?' active':''}`} onClick={() => setView('capture')}>
+            <span>⚡</span><span style={{flex:1}}>Quick Capture</span>
+            {todayCaptures.length > 0 && <span className="nav-badge">{todayCaptures.length}</span>}
+          </div>
+          <div className={`nav-item${view==='routines'?' active':''}`} onClick={() => setView('routines')}>
+            <span>♻</span><span style={{flex:1}}>Routinen</span>
+            {routineOpen > 0 && <span className="nav-badge">{routineOpen}</span>}
+          </div>
+          <div className={`nav-item${view==='projects'?' active':''}`} onClick={() => setView('projects')}>
+            <span>🎧</span><span style={{flex:1}}>Musik / Projekte</span>
+            {inArbeitCount > 0 && <span className="nav-badge">{inArbeitCount}</span>}
+          </div>
+
+          {streak > 0 && <div className="streak-badge">🔥 {streak} Tag{streak !== 1 ? 'e' : ''} in Folge</div>}
+        </aside>
+
+        {/* ── Main ── */}
+        <main className="main">
+
+          {/* ── Planner ── */}
+          {view === 'planner' && (
+            <>
+              <header className="main-header">
+                <div>
+                  <div className="main-header-title">Dein Tag als Freigeist</div>
+                  <div className="main-header-subtitle">Maximal 3 echte Prioritäten. Alles andere ist Bonus.</div>
+                  <div className="pill-row">
+                    <div className="pill">ADHS-freundlich</div>
+                    <div className="pill">lokal gespeichert</div>
+                    <button className={`pill fokus-pill${fokusActive?' active':''}`} onClick={() => setFokusActive(f => !f)}>
+                      {fokusActive ? '⚡ Fokus AN' : '⚡ Fokus starten'}
+                    </button>
+                  </div>
+                </div>
+                <div className="pill">{doneCount}/{tasks.length || 3} erledigt</div>
+              </header>
+              <section className="card-row">
+                <section className="card">
+                  <div className="card-title">Daily Big 3</div>
+                  <div className="card-subtitle">Was muss passieren, damit sich heute nach Fortschritt anfühlt?</div>
+                  <div className="list">
+                    {tasks.map(task => (
+                      <label key={task.id} className={`list-item${task.done?' done':''}`}>
+                        <input type="checkbox" checked={task.done} onChange={() => toggleTask(task.id)} />
+                        <div className="list-item-label">{task.label}<div className="list-item-meta">{task.done ? '✓ erledigt' : 'offen'}</div></div>
+                      </label>
+                    ))}
+                    {tasks.length === 0 && <div className="list-item-meta">Noch nichts drin. Was wäre die eine Sache, die heute zählt?</div>}
+                  </div>
+                  <div className="input-row">
+                    <input placeholder="Neue Priorität …" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addTask(); }} />
+                    <button onClick={addTask}>+ Add</button>
+                  </div>
+                  <div className="list-item-meta" style={{marginTop:8}}>Max 3. <button className="link-btn" onClick={clearTasks}>Zurücksetzen</button></div>
+                </section>
+                <section className="card">
+                  <div className="card-title">Anker & Ideen</div>
+                  <div className="card-subtitle">Deine Regeln für den Alltag.</div>
+                  <div className="chip-row">
+                    <div className="chip">☕ Nach dem Aufstehen: 3 Dinge wählen</div>
+                    <div className="chip">🎧 Erst Alltag, dann Musik</div>
+                    <div className="chip">🧾 5-Minuten-Regel für Papierkram</div>
+                    <div className="chip">📵 Fokusmodus für Sessions</div>
+                    <div className="chip">👥 Freundetage ohne schlechtes Gewissen</div>
+                  </div>
+                </section>
+              </section>
+              {/* Quick Captures heute im Planner */}
+              {todayCaptures.length > 0 && (
+                <section className="card captures-card">
+                  <div className="card-title">⚡ Captures heute</div>
+                  <div className="captures-list">
+                    {todayCaptures.map(c => (
+                      <div key={c.id} className="capture-item">
+                        <span className="capture-time">{fmtTime(c.ts)}</span>
+                        <span className="capture-text">{c.text}</span>
+                        <button className="capture-del" onClick={() => deleteCapture(c.id)} aria-label="Löschen">×</button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+
+          {/* ── Tracker ── */}
+          {view === 'tracker' && (
+            <>
+              <header className="main-header">
+                <div>
+                  <div className="main-header-title">Erfolgs-Tracker</div>
+                  <div className="main-header-subtitle">Deine abgeschlossenen Big 3 auf einen Blick.</div>
+                </div>
+                <div className="streak-inline">🔥 <strong>{streak}</strong> Tag{streak !== 1 ? 'e' : ''} Streak</div>
+              </header>
+              <div className="legend-row">
+                <span><span className="legend-dot full" /> Alle erledigt</span>
+                <span><span className="legend-dot partial" /> Teils erledigt</span>
+                <span><span className="legend-dot none" /> Nichts erledigt</span>
+              </div>
+              <div className="cal-nav">
+                <button className="cal-nav-btn" onClick={() => { if (calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1); }}>‹</button>
+                <span className="cal-nav-label">{monthNames[calMonth]} {calYear}</span>
+                <button className="cal-nav-btn" onClick={() => { if (calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1); }}>›</button>
+              </div>
+              <div className="cal-grid">
+                {['Mo','Di','Mi','Do','Fr','Sa','So'].map(d => <div key={d} className="cal-weekday">{d}</div>)}
+                {Array.from({length:firstWeekday}).map((_,i) => <div key={`e${i}`} className="cal-day empty" />)}
+                {Array.from({length:daysInMonth}).map((_,i) => {
+                  const day = i+1, key = dayKey(day), status = dayStatus(day), isToday = key===today;
+                  return (
+                    <button key={day} className={`cal-day ${status}${isToday?' today':''}${selectedDay===key?' selected':''}`} onClick={() => setSelectedDay(selectedDay===key?null:key)}>
+                      <span className="cal-day-num">{day}</span>
+                      {status!=='empty' && <span className="cal-day-dots">{historyMap[key]?.tasks.map((t,ti) => <span key={ti} className={`cal-dot ${t.done?'done':'open'}`} />)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedDay && (
+                <div className="day-detail card">
+                  <div className="card-title">{new Date(selectedDay+'T12:00:00').toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'})}</div>
+                  {selectedRecord ? (
+                    <div className="list">
+                      {selectedRecord.tasks.map((t,i) => (
+                        <div key={i} className={`list-item${t.done?' done':''}`}>
+                          <span className="task-icon">{t.done?'✅':'⬜'}</span>
+                          <span className="list-item-label">{t.label}</span>
+                        </div>
+                      ))}
+                      <div className="list-item-meta" style={{marginTop:6}}>{selectedRecord.tasks.filter(t=>t.done).length}/{selectedRecord.tasks.length} erledigt</div>
+                    </div>
+                  ) : <div className="list-item-meta">Kein Eintrag für diesen Tag.</div>}
+                </div>
+              )}
+              <div className="stats-row">
+                {(() => {
+                  const mr = history.filter(r=>r.date.startsWith(`${calYear}-${String(calMonth+1).padStart(2,'0')}`));
+                  return (<>
+                    <div className="stat-card"><div className="stat-num">{mr.length}</div><div className="stat-label">Aktive Tage</div></div>
+                    <div className="stat-card"><div className="stat-num">{mr.filter(r=>r.tasks.length>0&&r.tasks.every(t=>t.done)).length}</div><div className="stat-label">Volle Big-3-Tage</div></div>
+                    <div className="stat-card"><div className="stat-num">{mr.reduce((a,r)=>a+r.tasks.filter(t=>t.done).length,0)}</div><div className="stat-label">Tasks erledigt</div></div>
+                    <div className="stat-card"><div className="stat-num">🔥{streak}</div><div className="stat-label">Streak</div></div>
+                  </>);
+                })()}
+              </div>
+            </>
+          )}
+
+          {/* ── Quick Capture View ── */}
+          {view === 'capture' && (
+            <>
+              <header className="main-header">
+                <div>
+                  <div className="main-header-title">⚡ Quick Capture</div>
+                  <div className="main-header-subtitle">Alle Captures des heutigen Tages.</div>
+                </div>
+                <div className="pill">{todayCaptures.length} heute</div>
+              </header>
+              <section className="card captures-card">
+                {todayCaptures.length === 0
+                  ? <div className="list-item-meta">Noch keine Captures heute. Nutze den + Button unten rechts.</div>
+                  : (
+                    <div className="captures-list">
+                      {todayCaptures.map(c => (
+                        <div key={c.id} className="capture-item">
+                          <span className="capture-time">{fmtTime(c.ts)}</span>
+                          <span className="capture-text">{c.text}</span>
+                          <button className="capture-del" onClick={() => deleteCapture(c.id)} aria-label="Löschen">×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }
+              </section>
+              {captures.filter(c => c.date !== todayStr()).length > 0 && (
+                <section className="card">
+                  <div className="card-title" style={{marginBottom:10}}>Ältere Captures</div>
+                  <div className="captures-list">
+                    {captures.filter(c => c.date !== todayStr()).slice(0,20).map(c => (
+                      <div key={c.id} className="capture-item">
+                        <span className="capture-time" style={{minWidth:72}}>{c.date}</span>
+                        <span className="capture-text">{c.text}</span>
+                        <button className="capture-del" onClick={() => deleteCapture(c.id)} aria-label="Löschen">×</button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+
+          {/* ── Routinen View ── */}
+          {view === 'routines' && (
+            <>
+              <header className="main-header">
+                <div>
+                  <div className="main-header-title">♻ Routinen</div>
+                  <div className="main-header-subtitle">Täglich zurückgesetzt. Dein Rhythmus.</div>
+                </div>
+                <div className="pill">{routineDone}/{routineTotal}</div>
+              </header>
+              <section className="card routines-card">
+                <div className="routines-header">
+                  <span className="routines-progress-text">{routineDone} / {routineTotal} erledigt</span>
+                </div>
+                <div className="routines-bar-wrap">
+                  <div className="routines-bar-fill" style={{width: routineTotal ? `${(routineDone/routineTotal)*100}%` : '0%'}} />
+                </div>
+                {(['morgen','abend','custom'] as const).map(cat => {
+                  const items = routineDay.items.filter(r => r.category === cat);
+                  if (!items.length) return null;
+                  const labels: Record<string,string> = { morgen:'🌅 Morgen', abend:'🌙 Abend', custom:'✨ Eigene' };
+                  return (
+                    <div key={cat} className="routine-group">
+                      <div className="routine-group-label">{labels[cat]}</div>
+                      <div className="routine-chips">
+                        {items.map(r => (
+                          <div key={r.id} className={`routine-chip${r.done?' done':''}`} onClick={() => toggleRoutine(r.id)}>
+                            <span className="routine-check">{r.done ? '✅' : '◻'}</span>
+                            <span className="routine-chip-label">{r.label}</span>
+                            <button className="routine-del" onClick={e => { e.stopPropagation(); deleteRoutine(r.id); }} aria-label="Löschen">×</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="routine-add-form">
+                  <input className="routine-add-input" placeholder="Neue Routine…" value={routineAddLabel} onChange={e => setRoutineAddLabel(e.target.value)} onKeyDown={e => { if (e.key==='Enter') addRoutine(); }} />
+                  <select className="routine-add-select" value={routineAddCat} onChange={e => setRoutineAddCat(e.target.value as 'morgen'|'abend'|'custom')}>
+                    <option value="morgen">Morgen</option>
+                    <option value="abend">Abend</option>
+                    <option value="custom">Eigene</option>
+                  </select>
+                  <button className="routine-add-btn" onClick={addRoutine} style={{width:'auto',padding:'9px 14px'}}>+ Hinzufügen</button>
+                </div>
+              </section>
+            </>
+          )}
+
+          {/* ── Projekte View ── */}
+          {view === 'projects' && (
+            <>
+              <header className="main-header">
+                <div>
+                  <div className="main-header-title">🎧 Musik / Projekte</div>
+                  <div className="main-header-subtitle">Deine SiCKaRiM Tracks & Ideen.</div>
+                </div>
+                <button className="fokus-btn primary" style={{fontSize:13,padding:'7px 14px'}} onClick={addProject}>+ Neu</button>
+              </header>
+              <div className="proj-filter-bar">
+                {(['all','suno','remix','live','other'] as const).map(t => (
+                  <button key={t} className={`proj-filter-btn${projTypeFilter===t?' active':''}`} onClick={()=>setProjTypeFilter(t)}>
+                    {t==='all'?'★ Alle':t}
+                  </button>
+                ))}
+              </div>
+              {projects.length === 0 && (
+                <div className="card" style={{textAlign:'center',padding:'32px 16px'}}>
+                  <div style={{fontSize:32,marginBottom:10}}>🎵</div>
+                  <div className="card-subtitle">Noch keine Projekte. Leg dein erstes an!</div>
+                </div>
+              )}
+              {(['inarbeit','idee','pausiert','fertig'] as ProjectStatus[]).map(status => {
+                const group = projects
+                  .filter(p => p.status === status && (projTypeFilter==='all' || p.type===projTypeFilter))
+                  .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+                if (!group.length) return null;
+                const meta = STATUS_META[status];
+                return (
+                  <div key={status} className="projects-group">
+                    <div className="projects-group-label">{meta.emoji} {meta.label} <span className="projects-group-count">({group.length})</span></div>
+                    <div className="projects-grid">
+                      {group.map(p => (
+                        editingProject === p.id ? (
+                          <div key={p.id} className="project-card" style={{background: meta.color, borderColor:'var(--accent)'}}>
+                            <input style={{background:'transparent',border:'none',borderBottom:'1px solid var(--border-glow)',color:'var(--text)',fontSize:15,fontWeight:600,width:'100%',outline:'none',marginBottom:8,paddingBottom:4}}
+                              value={p.title} onChange={e => updateProject(p.id, {title: e.target.value})} autoFocus />
+                            <div style={{display:'flex',gap:6,marginBottom:8}}>
+                              <select style={{flex:1,background:'var(--bg)',border:'1px solid var(--border-subtle)',borderRadius:6,color:'var(--text)',fontSize:12,padding:'4px 6px'}}
+                                value={p.type} onChange={e => updateProject(p.id, {type: e.target.value as ProjectType})}>
+                                <option value="suno">Suno</option><option value="remix">Remix</option><option value="live">Live</option><option value="other">Other</option>
+                              </select>
+                              <select style={{flex:1,background:'var(--bg)',border:'1px solid var(--border-subtle)',borderRadius:6,color:'var(--text)',fontSize:12,padding:'4px 6px'}}
+                                value={p.status} onChange={e => updateProject(p.id, {status: e.target.value as ProjectStatus})}>
+                                <option value="idee">Idee</option><option value="inarbeit">In Arbeit</option><option value="fertig">Fertig</option><option value="pausiert">Pausiert</option>
+                              </select>
+                            </div>
+                            <textarea style={{width:'100%',background:'rgba(255,255,255,0.04)',border:'1px solid var(--border-subtle)',borderRadius:6,color:'var(--text)',fontSize:12,padding:'6px 8px',resize:'none',fontFamily:'var(--font-body)'}}
+                              rows={2} placeholder="Notiz…" value={p.note} onChange={e => updateProject(p.id, {note: e.target.value})} />
+                            <input className="proj-input" placeholder="Suno URL" value={p.sunoUrl??''} onChange={e=>updateProject(p.id,{sunoUrl:e.target.value})} />
+                            <div style={{display:'flex',gap:6,marginTop:8,justifyContent:'flex-end'}}>
+                              <button className="fokus-btn danger" style={{fontSize:11,padding:'5px 10px'}} onClick={() => deleteProject(p.id)}>Löschen</button>
+                              <button className="fokus-btn primary" style={{fontSize:11,padding:'5px 10px'}} onClick={() => setEditingProject(null)}>Fertig</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div key={p.id} className="project-card" style={{background: meta.color}} onClick={() => setEditingProject(p.id)}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:6}}>
+                              <span style={{fontSize:15,fontWeight:600,color:'var(--text)',lineHeight:1.3}}>{p.title}</span>
+                              <span style={{fontSize:11,background:'rgba(255,255,255,0.06)',padding:'2px 7px',borderRadius:999,whiteSpace:'nowrap',color:'var(--text-muted)'}}>{p.type}</span>
+                            </div>
+                            {p.note && <div style={{fontSize:12,color:'var(--text-muted)',lineHeight:1.5,marginTop:4,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{p.note}</div>}
+                            {p.sunoUrl && <a className="proj-suno-link" href={p.sunoUrl} target="_blank" rel="noreferrer">🔗 Suno</a>}
+                            <div style={{fontSize:10,color:'var(--text-faint)',marginTop:6}}>{new Date(p.updatedAt).toLocaleDateString('de-DE')}</div>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+        </main>
+      </div>
+    </>
+  );
+};

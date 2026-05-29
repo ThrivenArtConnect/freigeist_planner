@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <clipPath id="roundRect">
+      <rect width="1024" height="1024" rx="220" ry="220"/>
+    </clipPath>
+    <filter id="cyanGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18" result="blur1"/>
+      <feFlood flood-color="#00e5ff" flood-opacity="0.8" result="color"/>
+      <feComposite in="color" in2="blur1" operator="in" result="glow"/>
+      <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="strongGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="32" result="blur1"/>
+      <feGaussianBlur stdDeviation="12" result="blur2"/>
+      <feFlood flood-color="#00e5ff" flood-opacity="0.9" result="c1"/>
+      <feFlood flood-color="#7c3aed" flood-opacity="0.5" result="c2"/>
+      <feComposite in="c1" in2="blur1" operator="in" result="g1"/>
+      <feComposite in="c2" in2="blur2" operator="in" result="g2"/>
+      <feMerge><feMergeNode in="g1"/><feMergeNode in="g2"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="bottleGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feFlood flood-color="#00e5ff" flood-opacity="0.6" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="glow"/>
+      <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="purpleGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feFlood flood-color="#a855f7" flood-opacity="0.9" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="glow"/>
+      <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <radialGradient id="coreGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="40%" stop-color="#00e5ff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="spiritGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="35%" stop-color="#b2f5ff"/>
+      <stop offset="70%" stop-color="#00bcd4" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0.3"/>
+    </radialGradient>
+    <linearGradient id="bottleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a2a3a"/>
+      <stop offset="50%" stop-color="#0d1b26"/>
+      <stop offset="100%" stop-color="#0a1520"/>
+    </linearGradient>
+    <linearGradient id="neckGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00e5ff" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#00bcd4" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+
+  <!-- BACKGROUND -->
+  <rect width="1024" height="1024" rx="220" ry="220" fill="#000000"/>
+
+  <!-- BOTTLE -->
+  <g clip-path="url(#roundRect)" filter="url(#bottleGlow)">
+    <path d="M440 870 L420 780 L390 740 L390 700 L460 680 L564 680 L634 700 L634 740 L604 780 L584 870 Z"
+          fill="url(#bottleGrad)" stroke="#00e5ff" stroke-width="2" stroke-opacity="0.5"/>
+    <rect x="465" y="620" width="94" height="68" rx="6"
+          fill="url(#bottleGrad)" stroke="#00e5ff" stroke-width="2.5" stroke-opacity="0.9"/>
+    <rect x="462" y="616" width="100" height="12" rx="4"
+          fill="url(#neckGlow)" opacity="0.9"/>
+    <ellipse cx="445" cy="760" rx="8" ry="40" fill="white" opacity="0.06" transform="rotate(-15 445 760)"/>
+    <line x1="425" y1="862" x2="599" y2="862" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.4"/>
+  </g>
+
+  <!-- ENERGY BEAM -->
+  <g clip-path="url(#roundRect)" filter="url(#strongGlow)">
+    <path d="M490 618 C480 560 470 500 460 440 C450 390 445 350 512 300 C579 350 574 390 564 440 C554 500 544 560 534 618 Z"
+          fill="url(#spiritGrad)" opacity="0.95"/>
+  </g>
+
+  <!-- PURPLE PLASMA VEINS -->
+  <g clip-path="url(#roundRect)" filter="url(#purpleGlow)" opacity="0.85">
+    <path d="M512 580 L490 520 L510 480 L495 440 L512 400" stroke="#a855f7" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M512 580 L534 520 L514 480 L530 440 L512 400" stroke="#a855f7" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M512 500 L470 470 L450 430" stroke="#a855f7" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M512 500 L554 470 L574 430" stroke="#a855f7" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M512 450 L480 410 L460 370" stroke="#7c3aed" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M512 450 L544 410 L564 370" stroke="#7c3aed" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- SPIRIT WINGS -->
+  <g clip-path="url(#roundRect)" filter="url(#strongGlow)">
+    <path d="M480 480 C440 460 380 450 320 460 C280 466 250 480 240 500 C260 495 310 490 370 500 C410 506 450 510 475 490 Z"
+          fill="#b2f5ff" opacity="0.95"/>
+    <path d="M544 480 C584 460 644 450 704 460 C744 466 774 480 784 500 C764 495 714 490 654 500 C614 506 574 510 549 490 Z"
+          fill="#b2f5ff" opacity="0.95"/>
+    <path d="M490 360 C480 300 500 240 512 200 C524 240 544 300 534 360 Z"
+          fill="white" opacity="0.95"/>
+    <path d="M490 370 C470 310 450 260 440 220 C455 255 465 290 480 350 Z"
+          fill="#b2f5ff" opacity="0.8"/>
+    <path d="M534 370 C554 310 574 260 584 220 C569 255 559 290 544 350 Z"
+          fill="#b2f5ff" opacity="0.8"/>
+    <path d="M250 498 C230 504 218 520 220 535" stroke="#00e5ff" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M260 488 C238 490 224 504 228 518" stroke="#00e5ff" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M774 498 C794 504 806 520 804 535" stroke="#00e5ff" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M764 488 C786 490 800 504 796 518" stroke="#00e5ff" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- ENERGY CORE -->
+  <g clip-path="url(#roundRect)">
+    <ellipse cx="512" cy="460" rx="60" ry="70" fill="url(#coreGrad)" opacity="0.95"/>
+    <ellipse cx="512" cy="460" rx="24" ry="28" fill="white" opacity="1"/>
+  </g>
+
+  <!-- STRIKE TRAIL (top-left sharp lines) -->
+  <g clip-path="url(#roundRect)" filter="url(#purpleGlow)">
+    <line x1="430" y1="340" x2="290" y2="200" stroke="#7c3aed" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+    <line x1="415" y1="355" x2="310" y2="240" stroke="#7c3aed" stroke-width="3.5" stroke-linecap="round" opacity="0.7"/>
+    <line x1="445" y1="330" x2="340" y2="190" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+  </g>
+  <g clip-path="url(#roundRect)" filter="url(#cyanGlow)">
+    <line x1="430" y1="340" x2="290" y2="200" stroke="#00e5ff" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+    <line x1="415" y1="355" x2="310" y2="240" stroke="#00bcd4" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+  </g>
+
+  <!-- PULSE TRAIL (top-right wavy) -->
+  <g clip-path="url(#roundRect)" filter="url(#purpleGlow)">
+    <path d="M594 330 C620 310 640 290 660 270 C680 250 700 265 720 240 C740 215 760 195 790 180"
+          stroke="#7c3aed" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  </g>
+  <g clip-path="url(#roundRect)" filter="url(#cyanGlow)">
+    <path d="M594 330 C620 310 640 290 660 270 C680 250 700 265 720 240 C740 215 760 195 790 180"
+          stroke="#00e5ff" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
+  <!-- FLOW TRAIL (top-center flame wisps) -->
+  <g clip-path="url(#roundRect)" filter="url(#cyanGlow)">
+    <path d="M548 280 C560 240 556 210 570 180 C576 165 584 155 576 140"
+          stroke="white" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M538 300 C548 265 550 235 560 210 C566 195 570 180 564 168"
+          stroke="#b2f5ff" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
+    <path d="M558 270 C572 235 580 210 590 185 C596 170 594 155 586 144"
+          stroke="#b2f5ff" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+  </g>
+
+</svg>

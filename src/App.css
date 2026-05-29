@@ -1,0 +1,5 @@
+.proj-filter-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.proj-filter-btn{font-size:.72rem;padding:4px 12px;border-radius:99px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;touch-action:manipulation}
+.proj-filter-btn.active{border-color:#00e5ff;color:#00e5ff;background:rgba(0,229,255,0.08)}
+.proj-suno-link{font-size:.72rem;color:#00e5ff;text-decoration:none;padding:2px 8px;border:1px solid rgba(0,229,255,0.3);border-radius:4px}
+.nav-badge{background:#00e5ff;color:#0d0d18;font-size:.65rem;font-weight:700;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center}
