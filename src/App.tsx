@@ -345,6 +345,129 @@ function CaptureItem({ capture, showDate, canPromote, onPromote, onDelete }: Cap
   );
 }
 
+// ── Projektkarte ─────────────────────────────────────────
+interface ProjectCardProps {
+  project: Project;
+  meta: { emoji: string; label: string; color: string };
+  isEditing: boolean;
+  onEdit: (id: string) => void;
+  onClose: () => void;
+  onUpdate: (id: string, changes: Partial<Project>) => void;
+  onDelete: (id: string) => void;
+}
+
+function ProjectCard({ project: p, meta, isEditing, onEdit, onClose, onUpdate, onDelete }: ProjectCardProps) {
+  // Inline-Edit-State für nextStep (nur auf der View-Karte, ohne vollen Edit-Modus)
+  const [editingNextStep, setEditingNextStep] = useState(false);
+  const [nextStepDraft, setNextStepDraft] = useState(p.nextStep ?? '');
+  const nextStepRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingNextStep) {
+      setNextStepDraft(p.nextStep ?? '');
+      setTimeout(() => nextStepRef.current?.focus(), 0);
+    }
+  }, [editingNextStep, p.nextStep]);
+
+  const commitNextStep = () => {
+    const val = nextStepDraft.trim();
+    onUpdate(p.id, { nextStep: val || undefined });
+    setEditingNextStep(false);
+  };
+
+  const cancelNextStep = () => {
+    setNextStepDraft(p.nextStep ?? '');
+    setEditingNextStep(false);
+  };
+
+  if (isEditing) {
+    return (
+      <div className="project-card" style={{background: meta.color, borderColor:'var(--accent)'}}>
+        <input
+          style={{background:'transparent',border:'none',borderBottom:'1px solid var(--border-glow)',color:'var(--text)',fontSize:15,fontWeight:600,width:'100%',outline:'none',marginBottom:8,paddingBottom:4}}
+          value={p.title} onChange={e => onUpdate(p.id, {title: e.target.value})} autoFocus
+        />
+        <div style={{display:'flex',gap:6,marginBottom:8}}>
+          <select
+            style={{flex:1,background:'var(--bg)',border:'1px solid var(--border-subtle)',borderRadius:6,color:'var(--text)',fontSize:12,padding:'4px 6px'}}
+            value={p.type} onChange={e => onUpdate(p.id, {type: e.target.value as ProjectType})}>
+            <option value="suno">Suno</option><option value="remix">Remix</option><option value="live">Live</option><option value="other">Other</option>
+          </select>
+          <select
+            style={{flex:1,background:'var(--bg)',border:'1px solid var(--border-subtle)',borderRadius:6,color:'var(--text)',fontSize:12,padding:'4px 6px'}}
+            value={p.status} onChange={e => onUpdate(p.id, {status: e.target.value as ProjectStatus})}>
+            <option value="idee">Idee</option><option value="inarbeit">In Arbeit</option><option value="fertig">Fertig</option><option value="pausiert">Pausiert</option>
+          </select>
+        </div>
+        <textarea
+          style={{width:'100%',background:'rgba(255,255,255,0.04)',border:'1px solid var(--border-subtle)',borderRadius:6,color:'var(--text)',fontSize:12,padding:'6px 8px',resize:'none',fontFamily:'var(--font-body)'}}
+          rows={2} placeholder="Notiz…" value={p.note} onChange={e => onUpdate(p.id, {note: e.target.value})}
+        />
+        <input className="proj-input" placeholder="Suno URL" value={p.sunoUrl??''} onChange={e=>onUpdate(p.id,{sunoUrl:e.target.value})} />
+        <div style={{display:'flex',gap:6,marginTop:8,justifyContent:'flex-end'}}>
+          <button className="fokus-btn danger" style={{fontSize:11,padding:'5px 10px'}} onClick={() => onDelete(p.id)}>Löschen</button>
+          <button className="fokus-btn primary" style={{fontSize:11,padding:'5px 10px'}} onClick={onClose}>Fertig</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="project-card" style={{background: meta.color}}>
+      {/* Kopfzeile: Titel + Typ-Badge */}
+      <div className="proj-card-header" onClick={() => onEdit(p.id)}>
+        <span className="proj-card-title">{p.title}</span>
+        <span className="proj-card-type-badge">{p.type}</span>
+      </div>
+
+      {/* Notiz (optional, 2 Zeilen) */}
+      {p.note && (
+        <div className="proj-card-note" onClick={() => onEdit(p.id)}>{p.note}</div>
+      )}
+
+      {/* Nächster Schritt – immer sichtbar */}
+      <div className="proj-nextstep-block">
+        <div className="proj-nextstep-label">▶ Nächster Schritt</div>
+        {editingNextStep ? (
+          <div className="proj-nextstep-edit-row">
+            <input
+              ref={nextStepRef}
+              className="proj-nextstep-input"
+              value={nextStepDraft}
+              onChange={e => setNextStepDraft(e.target.value)}
+              placeholder="Was ist der nächste konkrete Schritt?"
+              onKeyDown={e => {
+                if (e.key === 'Enter') commitNextStep();
+                if (e.key === 'Escape') cancelNextStep();
+              }}
+            />
+            <button className="proj-nextstep-btn save" onClick={commitNextStep} aria-label="Speichern">✓</button>
+            <button className="proj-nextstep-btn cancel" onClick={cancelNextStep} aria-label="Abbrechen">✕</button>
+          </div>
+        ) : (
+          <div
+            className={`proj-nextstep-value${p.nextStep ? '' : ' empty'}`}
+            onClick={e => { e.stopPropagation(); setEditingNextStep(true); }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingNextStep(true); } }}
+          >
+            {p.nextStep || 'Nächsten Schritt festhalten…'}
+          </div>
+        )}
+      </div>
+
+      {/* Footer: Suno-Link + Datum */}
+      <div className="proj-card-footer" onClick={() => onEdit(p.id)}>
+        {p.sunoUrl && (
+          <a className="proj-suno-link" href={p.sunoUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>🔗 Suno</a>
+        )}
+        <span className="proj-card-date">{new Date(p.updatedAt).toLocaleDateString('de-DE')}</span>
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────
 export const App: React.FC = () => {
   // Big 3
@@ -1123,39 +1246,16 @@ export const App: React.FC = () => {
                     <div className="projects-group-label">{meta.emoji} {meta.label} <span className="projects-group-count">({group.length})</span></div>
                     <div className="projects-grid">
                       {group.map(p => (
-                        editingProject === p.id ? (
-                          <div key={p.id} className="project-card" style={{background: meta.color, borderColor:'var(--accent)'}}>
-                            <input style={{background:'transparent',border:'none',borderBottom:'1px solid var(--border-glow)',color:'var(--text)',fontSize:15,fontWeight:600,width:'100%',outline:'none',marginBottom:8,paddingBottom:4}}
-                              value={p.title} onChange={e => updateProject(p.id, {title: e.target.value})} autoFocus />
-                            <div style={{display:'flex',gap:6,marginBottom:8}}>
-                              <select style={{flex:1,background:'var(--bg)',border:'1px solid var(--border-subtle)',borderRadius:6,color:'var(--text)',fontSize:12,padding:'4px 6px'}}
-                                value={p.type} onChange={e => updateProject(p.id, {type: e.target.value as ProjectType})}>
-                                <option value="suno">Suno</option><option value="remix">Remix</option><option value="live">Live</option><option value="other">Other</option>
-                              </select>
-                              <select style={{flex:1,background:'var(--bg)',border:'1px solid var(--border-subtle)',borderRadius:6,color:'var(--text)',fontSize:12,padding:'4px 6px'}}
-                                value={p.status} onChange={e => updateProject(p.id, {status: e.target.value as ProjectStatus})}>
-                                <option value="idee">Idee</option><option value="inarbeit">In Arbeit</option><option value="fertig">Fertig</option><option value="pausiert">Pausiert</option>
-                              </select>
-                            </div>
-                            <textarea style={{width:'100%',background:'rgba(255,255,255,0.04)',border:'1px solid var(--border-subtle)',borderRadius:6,color:'var(--text)',fontSize:12,padding:'6px 8px',resize:'none',fontFamily:'var(--font-body)'}}
-                              rows={2} placeholder="Notiz…" value={p.note} onChange={e => updateProject(p.id, {note: e.target.value})} />
-                            <input className="proj-input" placeholder="Suno URL" value={p.sunoUrl??''} onChange={e=>updateProject(p.id,{sunoUrl:e.target.value})} />
-                            <div style={{display:'flex',gap:6,marginTop:8,justifyContent:'flex-end'}}>
-                              <button className="fokus-btn danger" style={{fontSize:11,padding:'5px 10px'}} onClick={() => deleteProject(p.id)}>Löschen</button>
-                              <button className="fokus-btn primary" style={{fontSize:11,padding:'5px 10px'}} onClick={() => setEditingProject(null)}>Fertig</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div key={p.id} className="project-card" style={{background: meta.color}} onClick={() => setEditingProject(p.id)}>
-                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:6}}>
-                              <span style={{fontSize:15,fontWeight:600,color:'var(--text)',lineHeight:1.3}}>{p.title}</span>
-                              <span style={{fontSize:11,background:'rgba(255,255,255,0.06)',padding:'2px 7px',borderRadius:999,whiteSpace:'nowrap',color:'var(--text-muted)'}}>{p.type}</span>
-                            </div>
-                            {p.note && <div style={{fontSize:12,color:'var(--text-muted)',lineHeight:1.5,marginTop:4,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{p.note}</div>}
-                            {p.sunoUrl && <a className="proj-suno-link" href={p.sunoUrl} target="_blank" rel="noreferrer">🔗 Suno</a>}
-                            <div style={{fontSize:10,color:'var(--text-faint)',marginTop:6}}>{new Date(p.updatedAt).toLocaleDateString('de-DE')}</div>
-                          </div>
-                        )
+                        <ProjectCard
+                          key={p.id}
+                          project={p}
+                          meta={meta}
+                          isEditing={editingProject === p.id}
+                          onEdit={setEditingProject}
+                          onClose={() => setEditingProject(null)}
+                          onUpdate={updateProject}
+                          onDelete={deleteProject}
+                        />
                       ))}
                     </div>
                   </div>

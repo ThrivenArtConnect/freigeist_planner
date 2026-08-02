@@ -20,7 +20,19 @@ export type RoutineDay = { date: string; items: RoutineItem[]; };
 export type RoutineHistoryEntry = { date: string; done: number; total: number; };
 export type ProjectStatus = 'idee' | 'inarbeit' | 'fertig' | 'pausiert';
 export type ProjectType = 'suno' | 'remix' | 'live' | 'other';
-export type Project = { id: string; title: string; type: ProjectType; status: ProjectStatus; note: string; sunoUrl?: string; updatedAt: string; createdAt: string; };
+
+export type Project = {
+  id: string;
+  title: string;
+  type: ProjectType;
+  status: ProjectStatus;
+  note: string;
+  sunoUrl?: string;
+  /** Optionaler nächster konkreter Schritt. Fehlt bei alten Projekten – rückwärtskompatibel. */
+  nextStep?: string;
+  updatedAt: string;
+  createdAt: string;
+};
 
 /** Genau eine Tagesnotiz pro Datum (YYYY-MM-DD). */
 export type DayNote = { date: string; text: string; };
