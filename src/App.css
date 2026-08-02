@@ -462,3 +462,123 @@
 @media (hover: none) {
   .proj-nextstep-value { min-height: 36px; display: flex; align-items: center; }
 }
+
+/* ── Wochenfokus ── */
+.week-themes-card { display: flex; flex-direction: column; gap: 12px; }
+
+.week-themes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.week-theme-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.week-theme-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.week-theme-input {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: var(--font-body);
+  transition: border-color var(--transition);
+  min-height: 44px;
+}
+.week-theme-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,229,255,0.07);
+}
+.week-theme-input::placeholder { color: var(--text-faint); }
+
+/* Wochenüberblick */
+.week-overview-card { display: flex; flex-direction: column; gap: 14px; }
+
+.week-days-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.week-day-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  transition: border-color var(--transition), background var(--transition);
+  min-height: 64px;
+}
+.week-day-cell.today {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(0,229,255,0.12);
+}
+.week-day-cell.full  { background: rgba(34,197,94,0.10);  border-color: rgba(34,197,94,0.25); }
+.week-day-cell.partial { background: rgba(250,204,21,0.08); border-color: rgba(250,204,21,0.2); }
+.week-day-cell.none  { background: rgba(255,75,106,0.06);  border-color: rgba(255,75,106,0.15); }
+.week-day-cell.future { opacity: 0.4; }
+
+.week-day-name {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.week-day-dot {
+  width: 8px; height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+.week-day-cell.full  .week-day-dot { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+.week-day-cell.partial .week-day-dot { background: var(--yellow); }
+.week-day-cell.none  .week-day-dot { background: var(--danger); }
+.week-day-cell.today .week-day-dot { box-shadow: 0 0 6px rgba(0,229,255,0.4); }
+
+.week-day-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kompakte Wochenstats */
+.week-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.week-stat {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 8px;
+  text-align: center;
+}
+.week-stat-num {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.5px;
+}
+.week-stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.3;
+}

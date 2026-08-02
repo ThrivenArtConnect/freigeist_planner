@@ -37,4 +37,14 @@ export type Project = {
 /** Genau eine Tagesnotiz pro Datum (YYYY-MM-DD). */
 export type DayNote = { date: string; text: string; };
 
-export type View = 'planner' | 'tracker' | 'capture' | 'routines' | 'projects';
+/**
+ * Wochenfokus – ein Eintrag pro Kalender-Woche.
+ * weekId: ISO-Wochenstart als YYYY-MM-DD (Montag).
+ * themes: 1–3 Wochenthemen/-prioritäten als Strings.
+ */
+export type WeekFocus = {
+  weekId: string;   // Montag der Woche, z.B. "2026-08-03"
+  themes: string[]; // max. 3 Einträge
+};
+
+export type View = 'planner' | 'tracker' | 'capture' | 'routines' | 'projects' | 'week';

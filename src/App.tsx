@@ -7,12 +7,14 @@ import {
   loadRoutines,
   loadTasksBundle,
   loadTracker,
+  loadWeekFocusList,
   saveCaptures,
   saveDayNotes,
   saveProjects,
   saveRoutines,
   saveTasksBundle,
   saveTracker,
+  saveWeekFocusList,
 } from './db';
 import type {
   Capture,
@@ -27,9 +29,42 @@ import type {
   RoutineHistoryEntry,
   RoutineItem,
   View,
+  WeekFocus,
 } from './types';
 
-export type { Capture, CaptureType, DayNote, DayRecord, DayTask, Project, ProjectStatus, ProjectType, RoutineDay, RoutineHistoryEntry, RoutineItem };
+export type { Capture, CaptureType, DayNote, DayRecord, DayTask, Project, ProjectStatus, ProjectType, RoutineDay, RoutineHistoryEntry, RoutineItem, WeekFocus };
+
+// ── Wochen-Helpers ──────────────────────────────────────────────
+
+/** Gibt den ISO-Montag der Woche als YYYY-MM-DD zurück. */
+function getWeekMonday(date: Date = new Date()): string {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=So, 1=Mo, ...
+  const diff = day === 0 ? -6 : 1 - day; // Montag
+  d.setDate(d.getDate() + diff);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+/** Gibt alle YYYY-MM-DD-Daten der laufenden Woche (Mo–So) zurück. */
+function getWeekDays(monday: string): string[] {
+  const days: string[] = [];
+  const base = new Date(monday + 'T12:00:00');
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+  }
+  return days;
+}
+
+/** Formatiert einen Montag-Datum-String als lesbaren Wochenbereich. */
+function fmtWeekRange(monday: string): string {
+  const mo = new Date(monday + 'T12:00:00');
+  const so = new Date(mo);
+  so.setDate(mo.getDate() + 6);
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  return `${mo.toLocaleDateString('de-DE', opts)} – ${so.toLocaleDateString('de-DE', opts)}`;
+}
 
 // ── Storage Keys ──────────────────────────────────────────
 const REMINDER_KEY = 'freigeist-reminder-v1';
@@ -508,6 +543,9 @@ export const App: React.FC = () => {
   // Tagesnotizen
   const [dayNotes, setDayNotes] = useState<DayNote[]>([]);
 
+  // Wochenfokus
+  const [weekFocusList, setWeekFocusList] = useState<WeekFocus[]>([]);
+
   const [hydrated, setHydrated] = useState(false);
 
   // Global Escape handler
@@ -531,13 +569,14 @@ export const App: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [tasksBundle, loadedHistory, loadedCaptures, routinesBundle, loadedProjects, loadedNotes] = await Promise.all([
+      const [tasksBundle, loadedHistory, loadedCaptures, routinesBundle, loadedProjects, loadedNotes, loadedWeekFocus] = await Promise.all([
         loadTasksBundle(),
         loadTracker(),
         loadCaptures(),
         loadRoutines(DEFAULT_ROUTINES),
         loadProjects(),
         loadDayNotes(),
+        loadWeekFocusList(),
       ]);
       if (cancelled) return;
 
@@ -606,6 +645,7 @@ export const App: React.FC = () => {
 
       setProjects(loadedProjects);
       setDayNotes(loadedNotes);
+      setWeekFocusList(loadedWeekFocus);
       setHydrated(true);
     })();
     return () => { cancelled = true; };
@@ -624,6 +664,7 @@ export const App: React.FC = () => {
   }, [routineDay, routineConfig, routineHistory, hydrated]);
   useEffect(() => { if (hydrated) void saveProjects(projects); }, [projects, hydrated]);
   useEffect(() => { if (hydrated) void saveDayNotes(dayNotes); }, [dayNotes, hydrated]);
+  useEffect(() => { if (hydrated) void saveWeekFocusList(weekFocusList); }, [weekFocusList, hydrated]);
 
   // ── Reminder ─────────────────────────────────────────────
   useEffect(() => {
@@ -856,6 +897,9 @@ export const App: React.FC = () => {
           <div className="nav-section-title">Heute</div>
           <div className={`nav-item${view==='planner'?' active':''}`} onClick={() => setView('planner')}>
             <span className="nav-dot" /><span>Daily Big 3</span>
+          </div>
+          <div className={`nav-item${view==='week'?' active':''}`} onClick={() => setView('week')}>
+            <span>📅</span><span>Wochenfokus</span>
           </div>
 
           <div className="nav-section-title">Verlauf</div>
@@ -1264,8 +1308,162 @@ export const App: React.FC = () => {
             </>
           )}
 
+          {/* ── Wochenfokus View ── */}
+          {view === 'week' && (
+            <WeekFocusView
+              weekFocusList={weekFocusList}
+              history={history}
+              onSave={setWeekFocusList}
+            />
+          )}
+
         </main>
       </div>
     </>
   );
 };
+
+// ── WeekFocusView ──────────────────────────────────────────────
+interface WeekFocusViewProps {
+  weekFocusList: WeekFocus[];
+  history: DayRecord[];
+  onSave: (list: WeekFocus[]) => void;
+}
+
+function WeekFocusView({ weekFocusList, history, onSave }: WeekFocusViewProps) {
+  const currentWeekId = getWeekMonday();
+  const weekDays      = getWeekDays(currentWeekId);
+  const weekRange     = fmtWeekRange(currentWeekId);
+
+  // Aktuellen Wochenfokus aus der Liste holen oder leer initialisieren
+  const current = weekFocusList.find(w => w.weekId === currentWeekId) ?? { weekId: currentWeekId, themes: [] };
+
+  // Lokaler Draft-State für die 3 Theme-Felder
+  const [drafts, setDrafts] = useState<[string, string, string]>([
+    current.themes[0] ?? '',
+    current.themes[1] ?? '',
+    current.themes[2] ?? '',
+  ]);
+  const [saved, setSaved] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync wenn weekFocusList von außen aktualisiert wird
+  useEffect(() => {
+    const c = weekFocusList.find(w => w.weekId === currentWeekId);
+    setDrafts([
+      c?.themes[0] ?? '',
+      c?.themes[1] ?? '',
+      c?.themes[2] ?? '',
+    ]);
+  }, [weekFocusList, currentWeekId]);
+
+  const handleDraftChange = (idx: 0 | 1 | 2, val: string) => {
+    const next: [string, string, string] = [...drafts] as [string, string, string];
+    next[idx] = val;
+    setDrafts(next);
+    setSaved(false);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const themes = next.map(t => t.trim()).filter(Boolean);
+      const updated = [
+        ...weekFocusList.filter(w => w.weekId !== currentWeekId),
+        ...(themes.length ? [{ weekId: currentWeekId, themes }] : []),
+      ];
+      onSave(updated);
+      setSaved(true);
+    }, 700);
+  };
+
+  // Wochenstatistik aus History berechnen
+  const weekRecords = history.filter(r => weekDays.includes(r.date));
+  const activeDays  = weekRecords.length;
+  const totalDone   = weekRecords.reduce((acc, r) => acc + r.tasks.filter(t => t.done).length, 0);
+  const fullDays    = weekRecords.filter(r => r.tasks.length > 0 && r.tasks.every(t => t.done)).length;
+
+  const hasThemes = drafts.some(d => d.trim());
+
+  return (
+    <>
+      <header className="main-header">
+        <div>
+          <div className="main-header-title">📅 Wochenfokus</div>
+          <div className="main-header-subtitle">{weekRange}</div>
+        </div>
+        {saved && <span className="daynote-saved-hint" style={{alignSelf:'center'}}>gespeichert</span>}
+      </header>
+
+      {/* Wochenthemen */}
+      <section className="card week-themes-card">
+        <div className="card-title">
+          Woche ausrichten
+        </div>
+        <div className="card-subtitle">
+          {hasThemes ? 'Deine Wochenprioritäten.' : 'Was soll diese Woche wirklich vorankommen?'}
+        </div>
+        <div className="week-themes-list">
+          {([0, 1, 2] as const).map(idx => (
+            <div key={idx} className="week-theme-row">
+              <span className="week-theme-num">{idx + 1}</span>
+              <input
+                className="week-theme-input"
+                placeholder={idx === 0 ? 'Wichtigstes Wochenthema…' : idx === 1 ? 'Zweites Thema (optional)…' : 'Drittes Thema (optional)…'}
+                value={drafts[idx]}
+                onChange={e => handleDraftChange(idx, e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Wochenüberblick */}
+      <section className="card week-overview-card">
+        <div className="card-title">Woche auf einen Blick</div>
+        <div className="card-subtitle">Big-3-Verlauf der laufenden Woche.</div>
+
+        {/* Wochentag-Streifen */}
+        <div className="week-days-strip">
+          {weekDays.map((d, i) => {
+            const rec = history.find(r => r.date === d);
+            const dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+            const isToday  = d === todayStr();
+            let status: 'full' | 'partial' | 'none' | 'future' = 'future';
+            if (rec && rec.tasks.length > 0) {
+              const done = rec.tasks.filter(t => t.done).length;
+              status = done === rec.tasks.length ? 'full' : done > 0 ? 'partial' : 'none';
+            } else if (d <= todayStr() && rec) {
+              status = 'none';
+            }
+            return (
+              <div key={d} className={`week-day-cell ${status}${isToday ? ' today' : ''}`}>
+                <span className="week-day-name">{dayNames[i]}</span>
+                <span className="week-day-dot" />
+                {rec && rec.tasks.length > 0 && (
+                  <span className="week-day-count">
+                    {rec.tasks.filter(t => t.done).length}/{rec.tasks.length}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Kompakte Stats */}
+        <div className="week-stats-row">
+          <div className="week-stat">
+            <div className="week-stat-num">{activeDays}</div>
+            <div className="week-stat-label">Tage aktiv</div>
+          </div>
+          <div className="week-stat">
+            <div className="week-stat-num">{fullDays}</div>
+            <div className="week-stat-label">Big 3 voll</div>
+          </div>
+          <div className="week-stat">
+            <div className="week-stat-num">{totalDone}</div>
+            <div className="week-stat-label">Tasks erledigt</div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}

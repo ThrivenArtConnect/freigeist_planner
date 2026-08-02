@@ -8,6 +8,7 @@ import type {
   RoutineDay,
   RoutineHistoryEntry,
   RoutineItem,
+  WeekFocus,
 } from './types';
 
 const STORAGE_KEY      = 'freigeist-planner-v1';
@@ -18,6 +19,7 @@ const ROUTINE_CFG_KEY  = 'freigeist-routine-config-v1';
 const ROUTINE_HIST_KEY = 'freigeist-routine-history-v1';
 const PROJECTS_KEY     = 'freigeist-projects-v1';
 const DAY_NOTES_KEY    = 'freigeist-daynotes-v1';
+const WEEK_FOCUS_KEY   = 'freigeist-weekfocus-v1';
 
 // ── Tageswechsel-State ────────────────────────────────────
 /** Speichert das Datum, für das die aktuellen Tasks geladen wurden. */
@@ -208,4 +210,23 @@ export async function loadDayNotes(): Promise<DayNote[]> {
 export async function saveDayNotes(notes: DayNote[]) {
   lsSave(DAY_NOTES_KEY, notes);
   await sbUpsert('daynotes', { data: notes });
+}
+
+// ── Wochenfokus ──────────────────────────────────────────────
+
+export async function loadWeekFocusList(): Promise<WeekFocus[]> {
+  const fallback = lsLoad<WeekFocus[]>(WEEK_FOCUS_KEY, []);
+  const row = await sbFetch('weekfocus');
+  if (row?.data) {
+    const list = row.data as WeekFocus[];
+    lsSave(WEEK_FOCUS_KEY, list);
+    return list;
+  }
+  if (fallback.length) void sbUpsert('weekfocus', { data: fallback });
+  return fallback;
+}
+
+export async function saveWeekFocusList(list: WeekFocus[]) {
+  lsSave(WEEK_FOCUS_KEY, list);
+  await sbUpsert('weekfocus', { data: list });
 }
