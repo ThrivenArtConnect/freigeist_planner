@@ -153,3 +153,178 @@
   cursor: not-allowed;
   box-shadow: none;
 }
+
+/* ── Capture-Typ-Auswahl im Sheet ── */
+.cap-type-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0 4px;
+}
+.cap-type-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  margin-right: 2px;
+}
+.cap-type-btn {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all var(--transition);
+  touch-action: manipulation;
+  min-height: 36px;
+}
+.cap-type-btn:hover  { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.cap-type-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+
+/* ── Capture Item – neu strukturiert ── */
+.capture-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid transparent;
+  transition: border-color var(--transition), background var(--transition), opacity var(--transition);
+  font-size: 13px;
+}
+.capture-item:hover { background: rgba(255,255,255,0.04); border-color: var(--border-subtle); }
+.capture-item.processed { opacity: 0.45; }
+
+.capture-item-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.capture-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.capture-type-badge {
+  font-size: 13px;
+  line-height: 1;
+}
+.capture-time {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.capture-processed-tag {
+  font-size: 10px;
+  color: var(--green);
+  opacity: 0.8;
+  letter-spacing: 0.02em;
+}
+.capture-text {
+  color: var(--text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* Aktions-Spalte rechts */
+.capture-item-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Promote-Button */
+.capture-promote {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,229,255,0.35);
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all var(--transition);
+  white-space: nowrap;
+  min-height: 32px;
+  touch-action: manipulation;
+  /* Immer sichtbar – kein opacity:0 */
+  opacity: 1;
+}
+.capture-promote:hover { background: rgba(0,229,255,0.18); border-color: var(--accent); box-shadow: 0 0 8px rgba(0,229,255,0.2); }
+.capture-promote.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  background: transparent;
+  color: var(--text-faint);
+  box-shadow: none;
+}
+
+/* Delete-Button */
+.capture-del {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 6px;
+  line-height: 1;
+  transition: color var(--transition);
+  min-width: 28px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  /* Immer sichtbar auf Touch */
+  opacity: 1;
+}
+.capture-del:hover { color: var(--danger); }
+
+/* ── Capture-Open-Badge (in Card-Title) ── */
+.capture-open-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid rgba(0,229,255,0.2);
+  min-width: 20px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* ── Inbox: Big-3-voll-Hinweis ── */
+.inbox-full-hint {
+  font-size: 12px;
+  color: var(--green);
+  background: rgba(34,197,94,0.07);
+  border: 1px solid rgba(34,197,94,0.18);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+
+/* ── Mobile: Touch-Targets immer sichtbar ── */
+@media (hover: none) {
+  .capture-promote,
+  .capture-del {
+    opacity: 1;
+  }
+}

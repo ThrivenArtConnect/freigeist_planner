@@ -16,6 +16,7 @@ import {
 } from './db';
 import type {
   Capture,
+  CaptureType,
   DayNote,
   DayRecord,
   DayTask,
@@ -28,10 +29,23 @@ import type {
   View,
 } from './types';
 
-export type { Capture, DayNote, DayRecord, DayTask, Project, ProjectStatus, ProjectType, RoutineDay, RoutineHistoryEntry, RoutineItem };
+export type { Capture, CaptureType, DayNote, DayRecord, DayTask, Project, ProjectStatus, ProjectType, RoutineDay, RoutineHistoryEntry, RoutineItem };
 
 // ── Storage Keys ──────────────────────────────────────────
 const REMINDER_KEY = 'freigeist-reminder-v1';
+
+// ── Capture-Typ-Metadaten ─────────────────────────────────
+const CAPTURE_TYPES: { value: CaptureType; label: string; emoji: string }[] = [
+  { value: 'aufgabe', label: 'Aufgabe', emoji: '✅' },
+  { value: 'idee',    label: 'Idee',    emoji: '💡' },
+  { value: 'link',    label: 'Link',    emoji: '🔗' },
+  { value: 'notiz',   label: 'Notiz',   emoji: '📝' },
+];
+
+function captureTypeLabel(type?: CaptureType): string {
+  if (!type) return '';
+  return CAPTURE_TYPES.find(t => t.value === type)?.emoji ?? '';
+}
 
 // ── Helpers ───────────────────────────────────────────────
 function todayStr() {
@@ -206,11 +220,7 @@ function TaskItem({ task, onToggle, onDelete, onSaveEdit }: TaskItemProps) {
     if (trimmed && trimmed !== task.label) onSaveEdit(task.id, trimmed);
     setEditing(false);
   };
-
-  const cancelEdit = () => {
-    setDraft(task.label);
-    setEditing(false);
-  };
+  const cancelEdit = () => { setDraft(task.label); setEditing(false); };
 
   if (editing) {
     return (
@@ -220,10 +230,7 @@ function TaskItem({ task, onToggle, onDelete, onSaveEdit }: TaskItemProps) {
           className="task-edit-input"
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') commitEdit();
-            if (e.key === 'Escape') cancelEdit();
-          }}
+          onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
         />
         <button className="task-action-btn save" onClick={commitEdit} aria-label="Speichern">✓</button>
         <button className="task-action-btn cancel" onClick={cancelEdit} aria-label="Abbrechen">✕</button>
@@ -261,7 +268,6 @@ function DayNoteEditor({ notes, today, onChange }: DayNoteEditorProps) {
   const [saved, setSaved] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync wenn notes von außen aktualisiert werden (z.B. nach Hydration)
   useEffect(() => {
     const n = notes.find(n => n.date === today);
     setText(n?.text ?? '');
@@ -297,39 +303,82 @@ function DayNoteEditor({ notes, today, onChange }: DayNoteEditorProps) {
   );
 }
 
+// ── Capture Item ──────────────────────────────────────────
+interface CaptureItemProps {
+  capture: Capture;
+  showDate?: boolean;
+  canPromote: boolean;
+  onPromote: (id: string, text: string) => void;
+  onDelete: (id: string) => void;
+}
+
+function CaptureItem({ capture, showDate, canPromote, onPromote, onDelete }: CaptureItemProps) {
+  const typeEmoji = captureTypeLabel(capture.type);
+  const isProcessed = capture.processed === true;
+
+  return (
+    <div className={`capture-item${isProcessed ? ' processed' : ''}`}>
+      <div className="capture-item-main">
+        <div className="capture-item-meta">
+          {typeEmoji && <span className="capture-type-badge">{typeEmoji}</span>}
+          <span className="capture-time">
+            {showDate ? capture.date : fmtTime(capture.ts)}
+          </span>
+          {isProcessed && <span className="capture-processed-tag">✓ verarbeitet</span>}
+        </div>
+        <span className="capture-text">{capture.text}</span>
+      </div>
+      <div className="capture-item-actions">
+        {!isProcessed && (
+          <button
+            className={`capture-promote${!canPromote ? ' disabled' : ''}`}
+            onClick={() => canPromote && onPromote(capture.id, capture.text)}
+            title={canPromote ? 'In Big 3 übernehmen' : 'Big 3 bereits voll (max. 3)'}
+            aria-label="In Big 3 übernehmen"
+          >
+            → Big 3
+          </button>
+        )}
+        <button className="capture-del" onClick={() => onDelete(capture.id)} aria-label="Löschen">×</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────
 export const App: React.FC = () => {
   // Big 3
-  const [tasks, setTasks]       = useState<DayTask[]>([]);
+  const [tasks, setTasks]         = useState<DayTask[]>([]);
   const [tasksDate, setTasksDate] = useState<string>('');
-  const [input, setInput]       = useState('');
-  const [history, setHistory]   = useState<DayRecord[]>([]);
-  const [view, setView]         = useState<View>('planner');
-  const [calYear, setCalYear]   = useState(new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(new Date().getMonth());
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [fokusActive, setFokusActive] = useState(false);
-  const [reminderTime, setReminderTime]       = useState('08:00');
+  const [input, setInput]         = useState('');
+  const [history, setHistory]     = useState<DayRecord[]>([]);
+  const [view, setView]           = useState<View>('planner');
+  const [calYear, setCalYear]     = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth]   = useState(new Date().getMonth());
+  const [selectedDay, setSelectedDay]     = useState<string | null>(null);
+  const [fokusActive, setFokusActive]     = useState(false);
+  const [reminderTime, setReminderTime]   = useState('08:00');
   const [reminderEnabled, setReminderEnabled] = useState(false);
-  const [notifPerm, setNotifPerm]             = useState<NotificationPermission>('default');
+  const [notifPerm, setNotifPerm]         = useState<NotificationPermission>('default');
   const [showReminderPopup, setShowReminderPopup] = useState(false);
   const reminderRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastFiredRef = useRef<string>('');
 
   // Quick Capture
-  const [captures, setCaptures]       = useState<Capture[]>([]);
-  const [capOpen, setCapOpen]         = useState(false);
-  const [capText, setCapText]         = useState('');
+  const [captures, setCaptures]   = useState<Capture[]>([]);
+  const [capOpen, setCapOpen]     = useState(false);
+  const [capText, setCapText]     = useState('');
+  const [capType, setCapType]     = useState<CaptureType | undefined>(undefined);
 
   // Routinen
-  const [routineDay, setRoutineDay]           = useState<RoutineDay>({ date: todayStr(), items: [] });
-  const [routineConfig, setRoutineConfig]     = useState<RoutineItem[]>([]);
-  const [routineHistory, setRoutineHistory]   = useState<RoutineHistoryEntry[]>([]);
+  const [routineDay, setRoutineDay]         = useState<RoutineDay>({ date: todayStr(), items: [] });
+  const [routineConfig, setRoutineConfig]   = useState<RoutineItem[]>([]);
+  const [routineHistory, setRoutineHistory] = useState<RoutineHistoryEntry[]>([]);
   const [routineAddLabel, setRoutineAddLabel] = useState('');
-  const [routineAddCat, setRoutineAddCat]     = useState<'morgen'|'abend'|'custom'>('custom');
+  const [routineAddCat, setRoutineAddCat]   = useState<'morgen'|'abend'|'custom'>('custom');
 
   // Projekte
-  const [projects, setProjects]             = useState<Project[]>([]);
+  const [projects, setProjects]           = useState<Project[]>([]);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [projTypeFilter, setProjTypeFilter] = useState<ProjectType | 'all'>('all');
 
@@ -340,7 +389,9 @@ export const App: React.FC = () => {
 
   // Global Escape handler
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setCapOpen(false); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setCapOpen(false); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
@@ -370,10 +421,7 @@ export const App: React.FC = () => {
       const today = todayStr();
 
       // ── Tageswechsel-Logik für Big 3 ──────────────────────
-      // Wenn das gespeicherte Datum nicht heute ist, archivieren wir die alten Tasks
-      // und starten mit einer leeren Liste für den neuen Tag.
       if (tasksBundle.date && tasksBundle.date !== today && tasksBundle.tasks.length > 0) {
-        // Alten Tag in History archivieren (nur wenn noch nicht vorhanden)
         const alreadyRecorded = loadedHistory.some(r => r.date === tasksBundle.date);
         if (!alreadyRecorded) {
           const archiveEntry: DayRecord = {
@@ -386,16 +434,13 @@ export const App: React.FC = () => {
         } else {
           setHistory(loadedHistory);
         }
-        // Neuen Tag mit leeren Tasks starten
         setTasks([]);
         setTasksDate(today);
         void saveTasksBundle({ date: today, tasks: [] });
       } else {
-        // Gleiches Datum oder keine gespeicherten Tasks → normal laden
         setTasks(tasksBundle.tasks);
         setTasksDate(tasksBundle.date || today);
         setHistory(loadedHistory);
-        // Wenn kein Datum gespeichert war, jetzt setzen
         if (!tasksBundle.date) {
           void saveTasksBundle({ date: today, tasks: tasksBundle.tasks });
         }
@@ -489,7 +534,7 @@ export const App: React.FC = () => {
   const addTask = (label?: string) => {
     const lbl = (label ?? input).trim();
     if (!lbl) return;
-    if (tasks.length >= 3) { alert('Maximal 3 Tagesprioritäten.'); return; }
+    if (tasks.length >= 3) return; // Stille Ablehnung – kein alert
     const today = todayStr();
     setTasks(prev => [...prev, { id: Date.now().toString(), label: lbl, done: false }]);
     if (!tasksDate) setTasksDate(today);
@@ -515,17 +560,51 @@ export const App: React.FC = () => {
   const clearTasks = () => { if (!window.confirm('Tagesliste wirklich zurücksetzen?')) return; setTasks([]); };
 
   // ── Quick Capture Actions ─────────────────────────────────
+  const openCapture = () => {
+    setCapText('');
+    setCapType(undefined);
+    setCapOpen(true);
+  };
+
   const saveCapture = () => {
     const text = capText.trim();
     if (!text) return;
-    const cap: Capture = { id: Date.now().toString(), text, ts: new Date().toISOString(), date: todayStr() };
+    const cap: Capture = {
+      id: Date.now().toString(),
+      text,
+      ts: new Date().toISOString(),
+      date: todayStr(),
+      type: capType,
+      processed: false,
+    };
     setCaptures(prev => [cap, ...prev]);
     setCapText('');
+    setCapType(undefined);
     setCapOpen(false);
   };
+
   const deleteCapture = (id: string) => setCaptures(prev => prev.filter(c => c.id !== id));
-  const todayCaptures = captures.filter(c => c.date === todayStr());
-  const olderCaptures = captures.filter(c => c.date !== todayStr());
+
+  /**
+   * Promote: Capture-Text in Big 3 übernehmen.
+   * Wenn Big 3 voll → kein alert, nur stille Ablehnung (Button ist disabled).
+   * Nach Promote: Capture als verarbeitet markieren (bleibt sichtbar, aber ausgegraut).
+   */
+  const promoteCapture = (id: string, text: string) => {
+    if (tasks.length >= 3) return;
+    addTask(text);
+    setCaptures(prev => prev.map(c => c.id === id ? { ...c, processed: true } : c));
+  };
+
+  const today = todayStr();
+  const todayCaptures  = captures.filter(c => c.date === today);
+  const olderCaptures  = captures.filter(c => c.date !== today);
+  // Offene (nicht verarbeitete) Captures heute
+  const openTodayCaptures = todayCaptures.filter(c => !c.processed);
+  // Badge: alle unverarbeiteten Captures (heute + älter)
+  const openCapturesCount = captures.filter(c => !c.processed).length;
+
+  const canPromote = tasks.length < 3;
 
   // ── Routine Actions ───────────────────────────────────────
   const toggleRoutine = (id: string) => {
@@ -574,7 +653,6 @@ export const App: React.FC = () => {
   const daysInMonth  = getDaysInMonth(calYear, calMonth);
   const firstWeekday = getFirstWeekday(calYear, calMonth);
   const historyMap   = Object.fromEntries(history.map(r => [r.date, r]));
-  const today        = todayStr();
   const monthNames   = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
 
   function dayKey(day: number) { return `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`; }
@@ -599,7 +677,7 @@ export const App: React.FC = () => {
       {/* FAB */}
       {!fokusActive && (
         <>
-          <button className={`fab${capOpen ? ' fab-open' : ''}`} onClick={() => setCapOpen(o => !o)} aria-label="Quick Capture">
+          <button className={`fab${capOpen ? ' fab-open' : ''}`} onClick={() => capOpen ? setCapOpen(false) : openCapture()} aria-label="Quick Capture">
             <span className="fab-icon">{capOpen ? '×' : '+'}</span>
           </button>
           {capOpen && (
@@ -614,6 +692,20 @@ export const App: React.FC = () => {
                   value={capText} onChange={e => setCapText(e.target.value)}
                   onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') saveCapture(); }}
                 />
+                {/* Typ-Auswahl – optional, kein Pflichtfeld */}
+                <div className="cap-type-row">
+                  <span className="cap-type-label">Typ:</span>
+                  {CAPTURE_TYPES.map(t => (
+                    <button
+                      key={t.value}
+                      className={`cap-type-btn${capType === t.value ? ' active' : ''}`}
+                      onClick={() => setCapType(prev => prev === t.value ? undefined : t.value)}
+                      type="button"
+                    >
+                      {t.emoji} {t.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="cap-actions">
                   <button className="fokus-btn" onClick={() => setCapOpen(false)}>Abbrechen</button>
                   <button className="fokus-btn primary" onClick={saveCapture} disabled={!capText.trim()}>Speichern ⌘↵</button>
@@ -672,7 +764,8 @@ export const App: React.FC = () => {
           <div className="nav-section-title">Features</div>
           <div className={`nav-item${view==='capture'?' active':''}`} onClick={() => setView('capture')}>
             <span>⚡</span><span style={{flex:1}}>Quick Capture</span>
-            {todayCaptures.length > 0 && <span className="nav-badge">{todayCaptures.length}</span>}
+            {/* Badge zeigt alle offenen (unverarbeiteten) Captures */}
+            {openCapturesCount > 0 && <span className="nav-badge">{openCapturesCount}</span>}
           </div>
           <div className={`nav-item${view==='routines'?' active':''}`} onClick={() => setView('routines')}>
             <span>♻</span><span style={{flex:1}}>Routinen</span>
@@ -727,7 +820,7 @@ export const App: React.FC = () => {
                 </div>
                 <div className="input-row">
                   <input
-                    placeholder="Neue Priorität …"
+                    placeholder={tasks.length >= 3 ? 'Big 3 bereits voll' : 'Neue Priorität …'}
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') addTask(); }}
@@ -745,17 +838,22 @@ export const App: React.FC = () => {
               {/* Tagesnotiz */}
               <DayNoteEditor notes={dayNotes} today={today} onChange={setDayNotes} />
 
-              {/* Quick Captures heute im Planner */}
-              {todayCaptures.length > 0 && (
+              {/* Offene Captures heute im Planner (nur unverarbeitete) */}
+              {openTodayCaptures.length > 0 && (
                 <section className="card captures-card">
-                  <div className="card-title">⚡ Captures heute</div>
+                  <div className="card-title">
+                    ⚡ Offene Captures
+                    <span className="capture-open-badge">{openTodayCaptures.length}</span>
+                  </div>
                   <div className="captures-list">
-                    {todayCaptures.map(c => (
-                      <div key={c.id} className="capture-item">
-                        <span className="capture-time">{fmtTime(c.ts)}</span>
-                        <span className="capture-text">{c.text}</span>
-                        <button className="capture-del" onClick={() => deleteCapture(c.id)} aria-label="Löschen">×</button>
-                      </div>
+                    {openTodayCaptures.map(c => (
+                      <CaptureItem
+                        key={c.id}
+                        capture={c}
+                        canPromote={canPromote}
+                        onPromote={promoteCapture}
+                        onDelete={deleteCapture}
+                      />
                     ))}
                   </div>
                 </section>
@@ -810,7 +908,6 @@ export const App: React.FC = () => {
                       <div className="list-item-meta" style={{marginTop:6}}>{selectedRecord.tasks.filter(t=>t.done).length}/{selectedRecord.tasks.length} erledigt</div>
                     </div>
                   ) : <div className="list-item-meta">Kein Eintrag für diesen Tag.</div>}
-                  {/* Tagesnotiz im Tracker anzeigen wenn vorhanden */}
                   {dayNotes.find(n => n.date === selectedDay) && (
                     <div className="daynote-readonly">
                       <div className="daynote-readonly-label">📝 Notiz</div>
@@ -833,42 +930,109 @@ export const App: React.FC = () => {
             </>
           )}
 
-          {/* ── Quick Capture View ── */}
+          {/* ── Quick Capture View / Inbox ── */}
           {view === 'capture' && (
             <>
               <header className="main-header">
                 <div>
-                  <div className="main-header-title">⚡ Quick Capture</div>
-                  <div className="main-header-subtitle">Alle Captures des heutigen Tages.</div>
+                  <div className="main-header-title">⚡ Inbox</div>
+                  <div className="main-header-subtitle">Captures verarbeiten, priorisieren, weiterleiten.</div>
                 </div>
-                <div className="pill">{todayCaptures.length} heute</div>
+                <div className="pill">
+                  {openCapturesCount > 0
+                    ? <><span style={{color:'var(--accent)',fontWeight:600}}>{openCapturesCount}</span> offen</>
+                    : 'alles verarbeitet ✓'
+                  }
+                </div>
               </header>
+
+              {/* Big-3-Status-Hinweis */}
+              {!canPromote && (
+                <div className="inbox-full-hint">
+                  ✅ Big 3 sind voll. Captures können erst promoted werden, wenn ein Platz frei ist.
+                </div>
+              )}
+
+              {/* Heute – offene Captures */}
               <section className="card captures-card">
-                {todayCaptures.length === 0
-                  ? <div className="list-item-meta">Noch keine Captures heute. Nutze den + Button unten rechts.</div>
+                <div className="card-title">
+                  Heute – offen
+                  {openTodayCaptures.length > 0 && <span className="capture-open-badge">{openTodayCaptures.length}</span>}
+                </div>
+                {openTodayCaptures.length === 0
+                  ? <div className="list-item-meta">Keine offenen Captures heute. Nutze den + Button.</div>
                   : (
                     <div className="captures-list">
-                      {todayCaptures.map(c => (
-                        <div key={c.id} className="capture-item">
-                          <span className="capture-time">{fmtTime(c.ts)}</span>
-                          <span className="capture-text">{c.text}</span>
-                          <button className="capture-del" onClick={() => deleteCapture(c.id)} aria-label="Löschen">×</button>
-                        </div>
+                      {openTodayCaptures.map(c => (
+                        <CaptureItem
+                          key={c.id}
+                          capture={c}
+                          canPromote={canPromote}
+                          onPromote={promoteCapture}
+                          onDelete={deleteCapture}
+                        />
                       ))}
                     </div>
                   )
                 }
               </section>
-              {olderCaptures.length > 0 && (
+
+              {/* Heute – verarbeitete Captures */}
+              {todayCaptures.filter(c => c.processed).length > 0 && (
                 <section className="card">
-                  <div className="card-title" style={{marginBottom:10}}>Ältere Captures</div>
+                  <div className="card-title" style={{color:'var(--text-muted)'}}>Heute – verarbeitet</div>
                   <div className="captures-list">
-                    {olderCaptures.slice(0,20).map(c => (
-                      <div key={c.id} className="capture-item">
-                        <span className="capture-time" style={{minWidth:72}}>{c.date}</span>
-                        <span className="capture-text">{c.text}</span>
-                        <button className="capture-del" onClick={() => deleteCapture(c.id)} aria-label="Löschen">×</button>
-                      </div>
+                    {todayCaptures.filter(c => c.processed).map(c => (
+                      <CaptureItem
+                        key={c.id}
+                        capture={c}
+                        canPromote={false}
+                        onPromote={promoteCapture}
+                        onDelete={deleteCapture}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Ältere offene Captures */}
+              {olderCaptures.filter(c => !c.processed).length > 0 && (
+                <section className="card">
+                  <div className="card-title">
+                    Älter – offen
+                    <span className="capture-open-badge">{olderCaptures.filter(c => !c.processed).length}</span>
+                  </div>
+                  <div className="captures-list">
+                    {olderCaptures.filter(c => !c.processed).slice(0, 20).map(c => (
+                      <CaptureItem
+                        key={c.id}
+                        capture={c}
+                        showDate
+                        canPromote={canPromote}
+                        onPromote={promoteCapture}
+                        onDelete={deleteCapture}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Ältere verarbeitete Captures (kollabiert) */}
+              {olderCaptures.filter(c => c.processed).length > 0 && (
+                <section className="card">
+                  <div className="card-title" style={{color:'var(--text-muted)',fontSize:12}}>
+                    Älter – verarbeitet ({olderCaptures.filter(c => c.processed).length})
+                  </div>
+                  <div className="captures-list">
+                    {olderCaptures.filter(c => c.processed).slice(0, 10).map(c => (
+                      <CaptureItem
+                        key={c.id}
+                        capture={c}
+                        showDate
+                        canPromote={false}
+                        onPromote={promoteCapture}
+                        onDelete={deleteCapture}
+                      />
                     ))}
                   </div>
                 </section>
