@@ -8,4 +8,7 @@ export type ProjectStatus = 'idee' | 'inarbeit' | 'fertig' | 'pausiert';
 export type ProjectType = 'suno' | 'remix' | 'live' | 'other';
 export type Project = { id: string; title: string; type: ProjectType; status: ProjectStatus; note: string; sunoUrl?: string; updatedAt: string; createdAt: string; };
 
+/** Genau eine Tagesnotiz pro Datum (YYYY-MM-DD). */
+export type DayNote = { date: string; text: string; };
+
 export type View = 'planner' | 'tracker' | 'capture' | 'routines' | 'projects';

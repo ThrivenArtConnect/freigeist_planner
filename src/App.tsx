@@ -2,18 +2,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
 import {
   loadCaptures,
+  loadDayNotes,
   loadProjects,
   loadRoutines,
-  loadTasks,
+  loadTasksBundle,
   loadTracker,
   saveCaptures,
+  saveDayNotes,
   saveProjects,
   saveRoutines,
-  saveTasks,
+  saveTasksBundle,
   saveTracker,
 } from './db';
 import type {
   Capture,
+  DayNote,
   DayRecord,
   DayTask,
   Project,
@@ -25,12 +28,12 @@ import type {
   View,
 } from './types';
 
-export type { Capture, DayRecord, DayTask, Project, ProjectStatus, ProjectType, RoutineDay, RoutineHistoryEntry, RoutineItem };
+export type { Capture, DayNote, DayRecord, DayTask, Project, ProjectStatus, ProjectType, RoutineDay, RoutineHistoryEntry, RoutineItem };
 
-// ── Storage Keys (local cache + reminder) ────────────────
+// ── Storage Keys ──────────────────────────────────────────
 const REMINDER_KEY = 'freigeist-reminder-v1';
 
-// ── Helpers ──────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -44,7 +47,7 @@ function load<T>(key: string, fallback: T): T {
 }
 function save(key: string, val: unknown) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
 
-// ── Default Routines ─────────────────────────────────────
+// ── Default Routines ──────────────────────────────────────
 const DEFAULT_ROUTINES: RoutineItem[] = [
   { id:'r1', label:'Wasser trinken',       category:'morgen', done:false },
   { id:'r2', label:'Bewegung',             category:'morgen', done:false },
@@ -60,7 +63,7 @@ const STATUS_META: Record<ProjectStatus, { emoji: string; label: string; color: 
   pausiert: { emoji:'⏸',  label:'Pausiert',  color:'rgba(255,255,255,0.04)' },
 };
 
-// ── Routine Streak ────────────────────────────────────────
+// ── Streak Helpers ────────────────────────────────────────
 function calcRoutineStreak(hist: RoutineHistoryEntry[]): number {
   const full = hist.filter(e => e.total > 0 && e.done === e.total).map(e => e.date).sort().reverse();
   if (!full.length) return 0;
@@ -97,7 +100,7 @@ function calcStreak(history: DayRecord[]): number {
 function getDaysInMonth(y: number, m: number) { return new Date(y, m + 1, 0).getDate(); }
 function getFirstWeekday(y: number, m: number) { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; }
 
-// ── Export helpers ───────────────────────────────────────
+// ── Export helpers ────────────────────────────────────────
 function exportJSON(data: unknown, filename: string) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -108,7 +111,7 @@ function exportJSON(data: unknown, filename: string) {
 
 const FOCUS_MINS = 25;
 
-// ── SVG Logo ─────────────────────────────────────────────
+// ── SVG Logo ──────────────────────────────────────────────
 function FreigeistLogo() {
   return (
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="Freigeist" xmlns="http://www.w3.org/2000/svg">
@@ -178,10 +181,127 @@ function ReminderPopup({ onClose, onOpen }: { onClose: () => void; onOpen: () =>
   );
 }
 
+// ── Big 3 Task Item ───────────────────────────────────────
+interface TaskItemProps {
+  task: DayTask;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+  onSaveEdit: (id: string, label: string) => void;
+}
+
+function TaskItem({ task, onToggle, onDelete, onSaveEdit }: TaskItemProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(task.label);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      setDraft(task.label);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [editing, task.label]);
+
+  const commitEdit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== task.label) onSaveEdit(task.id, trimmed);
+    setEditing(false);
+  };
+
+  const cancelEdit = () => {
+    setDraft(task.label);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="task-edit-row">
+        <input
+          ref={inputRef}
+          className="task-edit-input"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commitEdit();
+            if (e.key === 'Escape') cancelEdit();
+          }}
+        />
+        <button className="task-action-btn save" onClick={commitEdit} aria-label="Speichern">✓</button>
+        <button className="task-action-btn cancel" onClick={cancelEdit} aria-label="Abbrechen">✕</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`list-item${task.done ? ' done' : ''}`}>
+      <label className="task-check-label">
+        <input type="checkbox" checked={task.done} onChange={() => onToggle(task.id)} />
+        <div className="list-item-label">
+          {task.label}
+          <div className="list-item-meta">{task.done ? '✓ erledigt' : 'offen'}</div>
+        </div>
+      </label>
+      <div className="task-item-actions">
+        <button className="task-action-btn edit" onClick={() => setEditing(true)} aria-label="Bearbeiten">✎</button>
+        <button className="task-action-btn delete" onClick={() => onDelete(task.id)} aria-label="Löschen">×</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tagesnotiz ────────────────────────────────────────────
+interface DayNoteEditorProps {
+  notes: DayNote[];
+  today: string;
+  onChange: (notes: DayNote[]) => void;
+}
+
+function DayNoteEditor({ notes, today, onChange }: DayNoteEditorProps) {
+  const existing = notes.find(n => n.date === today);
+  const [text, setText] = useState(existing?.text ?? '');
+  const [saved, setSaved] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync wenn notes von außen aktualisiert werden (z.B. nach Hydration)
+  useEffect(() => {
+    const n = notes.find(n => n.date === today);
+    setText(n?.text ?? '');
+  }, [notes, today]);
+
+  const handleChange = (val: string) => {
+    setText(val);
+    setSaved(false);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const updated = [...notes.filter(n => n.date !== today)];
+      if (val.trim()) updated.push({ date: today, text: val });
+      onChange(updated);
+      setSaved(true);
+    }, 600);
+  };
+
+  return (
+    <section className="card daynote-card">
+      <div className="card-title">
+        📝 Tagesnotiz
+        {saved && <span className="daynote-saved-hint">gespeichert</span>}
+      </div>
+      <div className="card-subtitle">Ein freier Gedanke für heute.</div>
+      <textarea
+        className="daynote-textarea"
+        placeholder="Was beschäftigt dich heute? Wie fühlst du dich? Was willst du festhalten…"
+        value={text}
+        onChange={e => handleChange(e.target.value)}
+        rows={4}
+      />
+    </section>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────
 export const App: React.FC = () => {
   // Big 3
   const [tasks, setTasks]       = useState<DayTask[]>([]);
+  const [tasksDate, setTasksDate] = useState<string>('');
   const [input, setInput]       = useState('');
   const [history, setHistory]   = useState<DayRecord[]>([]);
   const [view, setView]         = useState<View>('planner');
@@ -200,8 +320,6 @@ export const App: React.FC = () => {
   const [captures, setCaptures]       = useState<Capture[]>([]);
   const [capOpen, setCapOpen]         = useState(false);
   const [capText, setCapText]         = useState('');
-  const [oldCapturesPage, setOldCapturesPage] = useState(1);
-  const OLD_CAP_PER_PAGE = 20;
 
   // Routinen
   const [routineDay, setRoutineDay]           = useState<RoutineDay>({ date: todayStr(), items: [] });
@@ -209,23 +327,25 @@ export const App: React.FC = () => {
   const [routineHistory, setRoutineHistory]   = useState<RoutineHistoryEntry[]>([]);
   const [routineAddLabel, setRoutineAddLabel] = useState('');
   const [routineAddCat, setRoutineAddCat]     = useState<'morgen'|'abend'|'custom'>('custom');
-  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
-  const [editingRoutineLabel, setEditingRoutineLabel] = useState('');
 
   // Projekte
   const [projects, setProjects]             = useState<Project[]>([]);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [projTypeFilter, setProjTypeFilter] = useState<ProjectType | 'all'>('all');
+
+  // Tagesnotizen
+  const [dayNotes, setDayNotes] = useState<DayNote[]>([]);
+
   const [hydrated, setHydrated] = useState(false);
 
-  // Global Escape handler for FAB sheet
+  // Global Escape handler
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setCapOpen(false); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  // ── URL params ──────────────────────────────────────────
+  // ── URL params ───────────────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('morning') === '1' || params.get('morning') === 'true') setTimeout(() => setShowReminderPopup(true), 600);
@@ -233,30 +353,63 @@ export const App: React.FC = () => {
     if (params.has('morning') || params.has('focus')) window.history.replaceState({}, '', window.location.pathname);
   }, []);
 
-  // ── Load from Supabase (fallback: localStorage cache) ─────
+  // ── Load ─────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [loadedTasks, loadedHistory, loadedCaptures, routinesBundle, loadedProjects] = await Promise.all([
-        loadTasks(),
+      const [tasksBundle, loadedHistory, loadedCaptures, routinesBundle, loadedProjects, loadedNotes] = await Promise.all([
+        loadTasksBundle(),
         loadTracker(),
         loadCaptures(),
         loadRoutines(DEFAULT_ROUTINES),
         loadProjects(),
+        loadDayNotes(),
       ]);
       if (cancelled) return;
 
-      setTasks(loadedTasks);
-      setHistory(loadedHistory);
+      const today = todayStr();
+
+      // ── Tageswechsel-Logik für Big 3 ──────────────────────
+      // Wenn das gespeicherte Datum nicht heute ist, archivieren wir die alten Tasks
+      // und starten mit einer leeren Liste für den neuen Tag.
+      if (tasksBundle.date && tasksBundle.date !== today && tasksBundle.tasks.length > 0) {
+        // Alten Tag in History archivieren (nur wenn noch nicht vorhanden)
+        const alreadyRecorded = loadedHistory.some(r => r.date === tasksBundle.date);
+        if (!alreadyRecorded) {
+          const archiveEntry: DayRecord = {
+            date: tasksBundle.date,
+            tasks: tasksBundle.tasks.map(t => ({ label: t.label, done: t.done })),
+          };
+          const newHistory = [...loadedHistory, archiveEntry];
+          setHistory(newHistory);
+          void saveTracker(newHistory);
+        } else {
+          setHistory(loadedHistory);
+        }
+        // Neuen Tag mit leeren Tasks starten
+        setTasks([]);
+        setTasksDate(today);
+        void saveTasksBundle({ date: today, tasks: [] });
+      } else {
+        // Gleiches Datum oder keine gespeicherten Tasks → normal laden
+        setTasks(tasksBundle.tasks);
+        setTasksDate(tasksBundle.date || today);
+        setHistory(loadedHistory);
+        // Wenn kein Datum gespeichert war, jetzt setzen
+        if (!tasksBundle.date) {
+          void saveTasksBundle({ date: today, tasks: tasksBundle.tasks });
+        }
+      }
+
       setReminderTime(loadReminderTime());
       if ('Notification' in window) setNotifPerm(Notification.permission);
       setCaptures(loadedCaptures);
 
+      // Routinen
       const cfg = routinesBundle.config.length ? routinesBundle.config : DEFAULT_ROUTINES;
       setRoutineConfig(cfg);
       const cfgIds = new Set(cfg.map(r => r.id));
       const storedDay = routinesBundle.day;
-      const today = todayStr();
       if (storedDay.date === today) {
         const syncedItems = cfg.map(cfgItem => {
           const existing = storedDay.items.find(i => i.id === cfgItem.id);
@@ -284,13 +437,16 @@ export const App: React.FC = () => {
       }
 
       setProjects(loadedProjects);
+      setDayNotes(loadedNotes);
       setHydrated(true);
     })();
     return () => { cancelled = true; };
   }, []);
 
-  // ── Persist to Supabase + localStorage cache ────────────
-  useEffect(() => { if (hydrated) void saveTasks(tasks); }, [tasks, hydrated]);
+  // ── Persist ───────────────────────────────────────────────
+  useEffect(() => {
+    if (hydrated) void saveTasksBundle({ date: tasksDate || todayStr(), tasks });
+  }, [tasks, tasksDate, hydrated]);
   useEffect(() => { if (hydrated) void saveTracker(history); }, [history, hydrated]);
   useEffect(() => { saveReminderTime(reminderTime); }, [reminderTime]);
   useEffect(() => { if (hydrated) void saveCaptures(captures); }, [captures, hydrated]);
@@ -299,8 +455,9 @@ export const App: React.FC = () => {
     void saveRoutines({ config: routineConfig, day: routineDay, history: routineHistory });
   }, [routineDay, routineConfig, routineHistory, hydrated]);
   useEffect(() => { if (hydrated) void saveProjects(projects); }, [projects, hydrated]);
+  useEffect(() => { if (hydrated) void saveDayNotes(dayNotes); }, [dayNotes, hydrated]);
 
-  // ── Reminder ────────────────────────────────────────────
+  // ── Reminder ─────────────────────────────────────────────
   useEffect(() => {
     if (!reminderEnabled) { if (reminderRef.current) clearInterval(reminderRef.current); return; }
     const check = () => {
@@ -328,22 +485,36 @@ export const App: React.FC = () => {
     setReminderEnabled(e => !e);
   };
 
-  // ── Big 3 Actions ────────────────────────────────────────
+  // ── Big 3 Actions ─────────────────────────────────────────
   const addTask = (label?: string) => {
     const lbl = (label ?? input).trim();
     if (!lbl) return;
     if (tasks.length >= 3) { alert('Maximal 3 Tagesprioritäten.'); return; }
+    const today = todayStr();
     setTasks(prev => [...prev, { id: Date.now().toString(), label: lbl, done: false }]);
+    if (!tasksDate) setTasksDate(today);
     if (!label) setInput('');
   };
+
   const toggleTask = (id: string) => {
     const updated = tasks.map(t => t.id === id ? { ...t, done: !t.done } : t);
     setTasks(updated);
     setHistory(recordDay(updated, history));
   };
+
+  const deleteTask = (id: string) => {
+    const updated = tasks.filter(t => t.id !== id);
+    setTasks(updated);
+    setHistory(recordDay(updated, history));
+  };
+
+  const editTask = (id: string, label: string) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, label } : t));
+  };
+
   const clearTasks = () => { if (!window.confirm('Tagesliste wirklich zurücksetzen?')) return; setTasks([]); };
 
-  // ── Quick Capture Actions ────────────────────────────────
+  // ── Quick Capture Actions ─────────────────────────────────
   const saveCapture = () => {
     const text = capText.trim();
     if (!text) return;
@@ -353,18 +524,10 @@ export const App: React.FC = () => {
     setCapOpen(false);
   };
   const deleteCapture = (id: string) => setCaptures(prev => prev.filter(c => c.id !== id));
-  // Capture → Big 3: promote capture text to task
-  const promoteCapture = (text: string, id: string) => {
-    if (tasks.length >= 3) { alert('Maximal 3 Tagesprioritäten.'); return; }
-    addTask(text);
-    deleteCapture(id);
-  };
-  const todayCaptures  = captures.filter(c => c.date === todayStr());
-  const olderCaptures  = captures.filter(c => c.date !== todayStr());
-  const olderPageCount = Math.ceil(olderCaptures.length / OLD_CAP_PER_PAGE);
-  const olderPageItems = olderCaptures.slice((oldCapturesPage - 1) * OLD_CAP_PER_PAGE, oldCapturesPage * OLD_CAP_PER_PAGE);
+  const todayCaptures = captures.filter(c => c.date === todayStr());
+  const olderCaptures = captures.filter(c => c.date !== todayStr());
 
-  // ── Routine Actions ──────────────────────────────────────
+  // ── Routine Actions ───────────────────────────────────────
   const toggleRoutine = (id: string) => {
     setRoutineDay(prev => ({ ...prev, items: prev.items.map(r => r.id === id ? { ...r, done: !r.done } : r) }));
   };
@@ -380,20 +543,12 @@ export const App: React.FC = () => {
     setRoutineConfig(prev => prev.filter(r => r.id !== id));
     setRoutineDay(prev => ({ ...prev, items: prev.items.filter(r => r.id !== id) }));
   };
-  const startEditRoutine = (r: RoutineItem) => { setEditingRoutineId(r.id); setEditingRoutineLabel(r.label); };
-  const saveEditRoutine = (id: string) => {
-    const label = editingRoutineLabel.trim();
-    if (!label) return;
-    setRoutineConfig(prev => prev.map(r => r.id === id ? { ...r, label } : r));
-    setRoutineDay(prev => ({ ...prev, items: prev.items.map(r => r.id === id ? { ...r, label } : r) }));
-    setEditingRoutineId(null);
-  };
   const routineDone   = routineDay.items.filter(r => r.done).length;
   const routineTotal  = routineDay.items.length;
   const routineOpen   = routineTotal - routineDone;
   const routineStreak = calcRoutineStreak(routineHistory);
 
-  // ── Project Actions ──────────────────────────────────────
+  // ── Project Actions ───────────────────────────────────────
   const addProject = () => {
     const p: Project = { id: Date.now().toString(), title: 'Neues Projekt', type: 'suno', status: 'idee', note: '', sunoUrl: '', updatedAt: new Date().toISOString(), createdAt: new Date().toISOString() };
     setProjects(prev => [p, ...prev]);
@@ -405,15 +560,15 @@ export const App: React.FC = () => {
   const deleteProject = (id: string) => { if (!window.confirm('Projekt löschen?')) return; setProjects(prev => prev.filter(p => p.id !== id)); setEditingProject(null); };
   const inArbeitCount = projects.filter(p => p.status === 'inarbeit').length;
 
-  // ── Export ───────────────────────────────────────────────
+  // ── Export ────────────────────────────────────────────────
   const handleExport = () => {
     exportJSON({
       exportedAt: new Date().toISOString(),
-      tasks, history, captures, routineConfig, routineHistory, projects,
+      tasks, history, captures, routineConfig, routineHistory, projects, dayNotes,
     }, `freigeist-export-${todayStr()}.json`);
   };
 
-  // ── Computed ─────────────────────────────────────────────
+  // ── Computed ──────────────────────────────────────────────
   const doneCount    = tasks.filter(t => t.done).length;
   const streak       = calcStreak(history);
   const daysInMonth  = getDaysInMonth(calYear, calMonth);
@@ -529,6 +684,7 @@ export const App: React.FC = () => {
           </div>
 
           {streak > 0 && <div className="streak-badge">🔥 {streak} Tag{streak !== 1 ? 'e' : ''} in Folge</div>}
+          {routineStreak > 0 && <div className="streak-badge" style={{marginTop:4}}>♻ {routineStreak} Routine-Streak</div>}
         </aside>
 
         {/* ── Main ── */}
@@ -551,37 +707,44 @@ export const App: React.FC = () => {
                 </div>
                 <div className="pill">{doneCount}/{tasks.length || 3} erledigt</div>
               </header>
-              <section className="card-row">
-                <section className="card">
-                  <div className="card-title">Daily Big 3</div>
-                  <div className="card-subtitle">Was muss passieren, damit sich heute nach Fortschritt anfühlt?</div>
-                  <div className="list">
-                    {tasks.map(task => (
-                      <label key={task.id} className={`list-item${task.done?' done':''}`}>
-                        <input type="checkbox" checked={task.done} onChange={() => toggleTask(task.id)} />
-                        <div className="list-item-label">{task.label}<div className="list-item-meta">{task.done ? '✓ erledigt' : 'offen'}</div></div>
-                      </label>
-                    ))}
-                    {tasks.length === 0 && <div className="list-item-meta">Noch nichts drin. Was wäre die eine Sache, die heute zählt?</div>}
+
+              <section className="card">
+                <div className="card-title">Daily Big 3</div>
+                <div className="card-subtitle">Was muss passieren, damit sich heute nach Fortschritt anfühlt?</div>
+                <div className="list">
+                  {tasks.map(task => (
+                    <TaskItem
+                      key={task.id}
+                      task={task}
+                      onToggle={toggleTask}
+                      onDelete={deleteTask}
+                      onSaveEdit={editTask}
+                    />
+                  ))}
+                  {tasks.length === 0 && (
+                    <div className="list-item-meta">Noch nichts drin. Was wäre die eine Sache, die heute zählt?</div>
+                  )}
+                </div>
+                <div className="input-row">
+                  <input
+                    placeholder="Neue Priorität …"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') addTask(); }}
+                    disabled={tasks.length >= 3}
+                  />
+                  <button onClick={() => addTask()} disabled={tasks.length >= 3}>+ Add</button>
+                </div>
+                {tasks.length > 0 && (
+                  <div className="list-item-meta" style={{marginTop:8}}>
+                    Max 3. <button className="link-btn" onClick={clearTasks}>Alle zurücksetzen</button>
                   </div>
-                  <div className="input-row">
-                    <input placeholder="Neue Priorität …" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addTask(); }} />
-                    <button onClick={addTask}>+ Add</button>
-                  </div>
-                  <div className="list-item-meta" style={{marginTop:8}}>Max 3. <button className="link-btn" onClick={clearTasks}>Zurücksetzen</button></div>
-                </section>
-                <section className="card">
-                  <div className="card-title">Anker & Ideen</div>
-                  <div className="card-subtitle">Deine Regeln für den Alltag.</div>
-                  <div className="chip-row">
-                    <div className="chip">☕ Nach dem Aufstehen: 3 Dinge wählen</div>
-                    <div className="chip">🎧 Erst Alltag, dann Musik</div>
-                    <div className="chip">🧾 5-Minuten-Regel für Papierkram</div>
-                    <div className="chip">📵 Fokusmodus für Sessions</div>
-                    <div className="chip">👥 Freundetage ohne schlechtes Gewissen</div>
-                  </div>
-                </section>
+                )}
               </section>
+
+              {/* Tagesnotiz */}
+              <DayNoteEditor notes={dayNotes} today={today} onChange={setDayNotes} />
+
               {/* Quick Captures heute im Planner */}
               {todayCaptures.length > 0 && (
                 <section className="card captures-card">
@@ -647,6 +810,13 @@ export const App: React.FC = () => {
                       <div className="list-item-meta" style={{marginTop:6}}>{selectedRecord.tasks.filter(t=>t.done).length}/{selectedRecord.tasks.length} erledigt</div>
                     </div>
                   ) : <div className="list-item-meta">Kein Eintrag für diesen Tag.</div>}
+                  {/* Tagesnotiz im Tracker anzeigen wenn vorhanden */}
+                  {dayNotes.find(n => n.date === selectedDay) && (
+                    <div className="daynote-readonly">
+                      <div className="daynote-readonly-label">📝 Notiz</div>
+                      <div className="daynote-readonly-text">{dayNotes.find(n => n.date === selectedDay)!.text}</div>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="stats-row">
@@ -689,11 +859,11 @@ export const App: React.FC = () => {
                   )
                 }
               </section>
-              {captures.filter(c => c.date !== todayStr()).length > 0 && (
+              {olderCaptures.length > 0 && (
                 <section className="card">
                   <div className="card-title" style={{marginBottom:10}}>Ältere Captures</div>
                   <div className="captures-list">
-                    {captures.filter(c => c.date !== todayStr()).slice(0,20).map(c => (
+                    {olderCaptures.slice(0,20).map(c => (
                       <div key={c.id} className="capture-item">
                         <span className="capture-time" style={{minWidth:72}}>{c.date}</span>
                         <span className="capture-text">{c.text}</span>
